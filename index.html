@@ -1,0 +1,2712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<title>Relativistic-Look Gravity Lab — Single-File N-Body Simulator</title>
+<style>
+  :root{
+    color-scheme:dark;
+    --bg:#020308; --panel:rgba(10,14,24,.88); --panel2:rgba(18,24,38,.92);
+    --line:rgba(255,255,255,.10); --text:#ecf4ff; --muted:#94a4bc;
+    --accent:#78b8ff; --accent2:#9c7dff; --good:#62dda9; --warn:#ffd166; --bad:#ff6b7a;
+    --shadow:0 18px 60px rgba(0,0,0,.42);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--bg);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text)}
+  body{user-select:none}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;background:#020308;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
+  canvas.dragging{cursor:grabbing}
+  button,input,select{font:inherit}
+  button{color:var(--text)}
+  #topbar{
+    position:fixed;left:14px;top:14px;display:flex;gap:8px;align-items:center;z-index:6;
+    background:rgba(4,7,13,.58);backdrop-filter:blur(12px);border:1px solid var(--line);
+    border-radius:14px;padding:7px 9px;box-shadow:var(--shadow)
+  }
+  .pill{font-size:12px;color:var(--muted);padding:5px 8px;border-radius:9px;background:rgba(255,255,255,.045);white-space:nowrap}
+  .pill.clickable{cursor:pointer;touch-action:manipulation;border:1px solid transparent}
+  .pill.clickable:active{background:rgba(120,184,255,.12);border-color:rgba(120,184,255,.18)}
+  .pill b{color:var(--text);font-variant-numeric:tabular-nums}
+  .simInteractionHint{font-size:10px;color:var(--muted);white-space:nowrap;padding:2px 4px}
+  .objectInteractionHint{margin:-3px 0 9px}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--good);box-shadow:0 0 10px currentColor}
+  #panel{
+    position:fixed;z-index:10;right:14px;top:14px;width:min(390px,calc(100vw - 28px));max-height:calc(100vh - 28px);
+    display:flex;flex-direction:column;background:var(--panel);backdrop-filter:blur(20px) saturate(135%);
+    border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden;transition:transform .28s ease,opacity .28s ease
+  }
+  #panel.hidden{transform:translateX(calc(100% + 30px));opacity:0;pointer-events:none}
+  .panelHead{display:flex;align-items:center;gap:10px;padding:14px 14px 10px;border-bottom:1px solid var(--line)}
+  .panelHead .title{font-weight:800;letter-spacing:.01em;flex:1}
+  .panelHead .subtitle{font-size:11px;color:var(--muted);font-weight:500}
+  .iconBtn,.ghostBtn,.primaryBtn,.dangerBtn{
+    border:1px solid var(--line);background:rgba(255,255,255,.055);border-radius:11px;padding:8px 10px;cursor:pointer;transition:.18s ease
+  }
+  .iconBtn:hover,.ghostBtn:hover{background:rgba(255,255,255,.10);transform:translateY(-1px)}
+  .primaryBtn{background:linear-gradient(135deg,rgba(61,145,255,.34),rgba(155,104,255,.30));border-color:rgba(120,184,255,.35)}
+  .primaryBtn:hover{filter:brightness(1.18);transform:translateY(-1px)}
+  .dangerBtn{background:rgba(255,77,96,.10);border-color:rgba(255,107,122,.24)}
+  .dangerBtn:hover{background:rgba(255,77,96,.18)}
+  .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:8px 10px;border-bottom:1px solid var(--line)}
+  .tab{border:0;border-radius:9px;padding:8px;background:transparent;color:var(--muted);cursor:pointer;font-weight:700;font-size:12px}
+  .tab.active{background:rgba(255,255,255,.07);color:var(--text)}
+  .tabPane{display:none;overflow:auto;min-height:0;padding:12px 12px 14px;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+  .tabPane.active{display:block}
+  .section{padding:12px;background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:14px;margin-bottom:10px}
+  .sectionTitle{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#aebbd0;margin-bottom:10px;font-weight:800}
+  label.row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;margin:10px 0;font-size:13px}
+  .desc{font-size:11px;color:var(--muted);line-height:1.45;margin-top:4px}
+  select,input[type="number"],input[type="search"]{
+    border:1px solid var(--line);background:rgba(0,0,0,.26);color:var(--text);border-radius:9px;padding:7px 8px;outline:none
+  }
+  .calcSearchWrap{position:relative}
+  .calcSearchResults{display:none;position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;max-height:210px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:rgba(7,10,18,.98);box-shadow:var(--shadow)}
+  .calcSearchResults.show{display:block}
+  .calcSearchItem{display:block;width:100%;border:0;border-bottom:1px solid rgba(255,255,255,.06);border-radius:0;background:transparent;padding:9px 10px;text-align:left;cursor:pointer}
+  .calcSearchItem:last-child{border-bottom:0}
+  .calcSearchItem:hover,.calcSearchItem:active{background:rgba(120,184,255,.10)}
+  .calcSearchItem b{display:block;font-size:12px}.calcSearchItem span{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+  .calcResult{margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:11px;background:rgba(0,0,0,.16);font-size:11px;line-height:1.5}
+  .calcResult strong{color:var(--text)}
+  .calcActionButtons{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch}
+  .calcActionButtons #calcStop{min-width:92px}
+  .impactList{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+  .impactEvent{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 9px;border-radius:9px;border:1px solid rgba(255,209,102,.18);background:rgba(255,209,102,.055)}
+  .predictionEventText{min-width:0;flex:1}
+  .calcEventValue{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+  .speed10Btn{flex:0 0 auto;border:1px solid rgba(120,184,255,.28);background:rgba(120,184,255,.09);color:#dcebff;border-radius:8px;padding:4px 7px;font-size:10px;font-weight:800;line-height:1;cursor:pointer;touch-action:manipulation}
+  .speed10Btn:hover,.speed10Btn:active{background:rgba(120,184,255,.17)}
+  .speed10Btn:disabled{opacity:.42;cursor:default}
+  .vectorLegend{display:flex;gap:12px;flex-wrap:wrap;margin-top:9px;font-size:10px;color:var(--muted)}
+  .vectorLegend span::before{content:"";display:inline-block;width:13px;height:2px;vertical-align:middle;margin-right:5px;border-radius:2px;background:currentColor}
+  .vectorVelocity{color:#7ed7ff}.vectorForce{color:#ffd166}
+  input[type="range"]{width:100%;accent-color:#78b8ff}
+  input[type="checkbox"]{width:18px;height:18px;accent-color:#78b8ff}
+  .valueRow{display:flex;align-items:center;gap:8px}
+  .valueBox{font-size:12px;font-variant-numeric:tabular-nums;min-width:82px;text-align:right;color:#d7e8ff}
+  .addGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .addGrid button{font-size:12px;text-align:left;min-height:42px}
+  .customObjectBtn{grid-column:1/-1!important;text-align:center!important;border-style:dashed!important;background:rgba(98,221,169,.07)!important;border-color:rgba(98,221,169,.34)!important;color:#d9fff0!important;font-weight:800}
+  .customObjectBtn:active{background:rgba(98,221,169,.14)!important}
+  .customSpawnBtn{border-color:rgba(98,221,169,.26)!important;background:linear-gradient(135deg,rgba(98,221,169,.11),rgba(120,184,255,.10))!important}
+  .customSpawnBtn .mini{color:#a9d9c7}
+  .formGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .field{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--muted)}
+  .field select,.field input{width:100%;min-width:0}
+  .wide{grid-column:1/-1}
+  .subpanel{padding:10px;border-radius:11px;background:rgba(0,0,0,.16);border:1px solid var(--line);margin-top:9px}
+  .hiddenControl{display:none!important}
+  .populationRow{display:grid;grid-template-columns:10px 1fr auto 30px;align-items:center;gap:8px;padding:9px;border:1px solid rgba(156,125,255,.18);border-radius:10px;background:rgba(156,125,255,.045);cursor:pointer}
+  .populationRow:hover,.populationRow:active{background:rgba(156,125,255,.09)}
+  .moreBtn{width:100%;margin-top:7px;font-size:11px}
+  .smallNote{font-size:10px;color:var(--muted);line-height:1.45;margin-top:7px}
+  .mini{font-size:10px;display:block;color:var(--muted);margin-top:2px}
+  #floatingTools{
+    position:fixed;right:14px;top:14px;z-index:9;display:none;align-items:center;gap:7px;
+  }
+  #floatingTools.show{display:flex}
+  #timeTools{
+    position:fixed;left:14px;top:14px;z-index:9;display:none;align-items:center;gap:7px;
+  }
+  #timeTools.show{display:flex}
+  #topbar.simControlsVisible{top:74px}
+  .floatBtn{
+    border:1px solid var(--line);background:rgba(10,14,24,.80);backdrop-filter:blur(12px);
+    width:46px;height:46px;border-radius:14px;display:grid;place-items:center;cursor:pointer;box-shadow:var(--shadow);
+    font-size:22px;font-weight:800;line-height:1;touch-action:none;-webkit-user-select:none;user-select:none
+  }
+  .floatBtn:active{transform:scale(.96);background:rgba(34,47,73,.92)}
+  .floatBtn.active{background:rgba(120,184,255,.15);border-color:rgba(120,184,255,.34)}
+  .floatBtn:disabled{opacity:.34;cursor:default;transform:none;background:rgba(10,14,24,.62)}
+  .timeFloatBtn{font-size:17px;letter-spacing:-.02em}
+  #timeCenterBtn{font-size:19px}
+  #gear{font-size:19px}
+  #toast{
+    position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);z-index:20;
+    background:rgba(10,14,24,.9);border:1px solid var(--line);border-radius:12px;padding:10px 13px;
+    opacity:0;pointer-events:none;transition:.22s ease;color:#dce9fb;font-size:12px;box-shadow:var(--shadow)
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+  #renameOverlay,#customObjectOverlay,#calcWarningOverlay{
+    position:fixed;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;
+    padding:18px;background:rgba(0,0,0,.48);backdrop-filter:blur(7px)
+  }
+  #renameOverlay.show,#customObjectOverlay.show,#calcWarningOverlay.show{display:flex}
+  .renameSheet{
+    width:min(430px,100%);background:var(--panel2);border:1px solid var(--line);border-radius:18px;
+    padding:14px;box-shadow:var(--shadow)
+  }
+  .renameTitle{font-weight:800;font-size:14px;margin-bottom:3px}
+  .renameSub{font-size:11px;color:var(--muted);margin-bottom:11px}
+  #renameInput{
+    width:100%;border:1px solid var(--line);background:rgba(0,0,0,.28);color:var(--text);
+    border-radius:11px;padding:11px 12px;outline:none;font-size:16px
+  }
+  #renameInput:focus{border-color:rgba(120,184,255,.5)}
+  .renameActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .customSheet{max-height:min(82vh,720px);overflow:auto;-webkit-overflow-scrolling:touch}
+  .customSheet input[type="text"],.customSheet input[type="number"],.customSheet select{width:100%;border:1px solid var(--line);background:rgba(0,0,0,.28);color:var(--text);border-radius:9px;padding:8px;outline:none}
+  .customColorControl{grid-column:1/-1;border:1px solid var(--line);border-radius:11px;padding:9px;background:rgba(0,0,0,.16)}
+  .customColorHead{display:grid;grid-template-columns:42px minmax(0,1fr);gap:9px;align-items:center;margin-bottom:8px}
+  .customColorPreview{width:42px;height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:#78b8ff}
+  .customColorHex{width:100%!important;text-transform:uppercase;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .colorSliderRow{display:grid;grid-template-columns:72px minmax(0,1fr) 38px;gap:7px;align-items:center;margin-top:7px;font-size:10px;color:var(--muted)}
+  .colorRange{-webkit-appearance:none;appearance:none;width:100%;height:11px!important;border:1px solid rgba(255,255,255,.14);border-radius:999px;outline:none;padding:0!important;background:#333}
+  .colorRange::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:21px;height:21px;border-radius:50%;background:#f5f8ff;border:2px solid rgba(0,0,0,.55);box-shadow:0 1px 5px rgba(0,0,0,.45)}
+  .colorRange::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#f5f8ff;border:2px solid rgba(0,0,0,.55);box-shadow:0 1px 5px rgba(0,0,0,.45)}
+  #customHue{background:linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
+  .physicsRoleHelp{grid-column:1/-1;margin-top:-2px;padding:8px 9px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.025);font-size:10px;color:var(--muted);line-height:1.5}
+  .physicsRoleHelp b{color:var(--text)}
+  .warningText{font-size:12px;line-height:1.55;color:var(--text);margin:9px 0}
+  .objectList{display:flex;flex-direction:column;gap:6px;max-height:310px;overflow:auto}
+  .objRow{display:grid;grid-template-columns:10px 1fr auto 30px;align-items:center;gap:8px;padding:8px 7px 8px 9px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.025);cursor:pointer}
+  .objRow:hover,.objRow.active{background:rgba(120,184,255,.08);border-color:rgba(120,184,255,.24)}
+  .objSwatch{width:10px;height:10px;border-radius:50%;box-shadow:0 0 8px currentColor}
+  .objName{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .objMeta{font-size:10px;color:var(--muted);white-space:nowrap}
+  .rowDelete{width:28px;height:28px;padding:0;border-radius:8px;border:1px solid rgba(255,107,122,.18);background:rgba(255,77,96,.07);color:#ff9aa5;cursor:pointer;font-weight:800;line-height:1;touch-action:manipulation}
+  .rowDelete:hover,.rowDelete:active{background:rgba(255,77,96,.18);border-color:rgba(255,107,122,.35)}
+  .kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:12px;margin-top:10px}
+  .kv div:nth-child(odd){color:var(--muted)}
+  .kv div:nth-child(even){text-align:right;font-variant-numeric:tabular-nums}
+  .empty{padding:28px 10px;text-align:center;color:var(--muted);font-size:12px}
+  .badge{font-size:10px;padding:3px 6px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04)}
+  .footerHint{font-size:10px;color:var(--muted);line-height:1.5;margin-top:6px}
+  #selectedCard{display:none}
+  #selectedCard.show{display:block}
+  #context{
+    position:fixed;left:14px;bottom:14px;z-index:6;padding:8px 10px;border-radius:12px;background:rgba(4,7,13,.54);
+    backdrop-filter:blur(10px);border:1px solid var(--line);font-size:11px;color:var(--muted);pointer-events:none
+  }
+  #context b{color:var(--text)}
+  .switchline{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .warn{color:var(--warn)}
+  .good{color:var(--good)}
+  .bad{color:var(--bad)}
+  .hr{height:1px;background:var(--line);margin:10px 0}
+  @media(max-width:720px){
+    #topbar{top:auto;bottom:14px;left:14px;right:14px;justify-content:space-between;overflow:hidden;flex-wrap:wrap}
+    .pill.hideMobile{display:none}
+    .simInteractionHint{order:10;flex:1 0 100%;text-align:center;padding:0 3px 2px;font-size:9px}
+    #context{display:none}
+    #panel{right:8px;top:8px;width:calc(100vw - 16px);max-height:calc(100vh - 78px)}
+    #floatingTools{right:10px;top:10px;gap:6px}
+    #timeTools{left:10px;top:10px;gap:6px}
+    #topbar.simControlsVisible{top:auto}
+    .floatBtn{width:48px;height:48px}
+    .tab{font-size:11px;padding:8px 4px}
+  }
+</style>
+</head>
+<body>
+<canvas id="sim"></canvas>
+
+<div id="topbar" class="simControlsVisible">
+  <div class="pill"><span class="dot" id="fpsDot"></span><b id="fps">60</b> FPS</div>
+  <div class="pill clickable" id="objectCountPill" role="button" tabindex="0" title="Open objects"><b id="bodyCount">0</b> objects</div>
+  <div class="pill hideMobile">sim: <b id="simRate">1.00 y/s</b></div>
+  <div class="pill hideMobile">span: <b id="viewSpan">20 AU</b></div>
+  <div class="simInteractionHint">Click an object to focus on it · click again to follow it</div>
+</div>
+
+<div id="panel" class="hidden">
+  <div class="panelHead">
+    <div>
+      <div class="title">Gravity Lab</div>
+      <div class="subtitle">N-body orbital sandbox</div>
+    </div>
+    <button class="iconBtn" id="pauseBtn" title="Pause / resume">⏸</button>
+    <button class="iconBtn" id="hideBtn" title="Hide settings">✕</button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-tab="controls">Controls</button>
+    <button class="tab" data-tab="objects">Objects</button>
+    <button class="tab" data-tab="calculator">Calculator</button>
+    <button class="tab" data-tab="info">Physics</button>
+  </div>
+
+  <div class="tabPane active" id="tab-controls">
+    <div class="section">
+      <div class="sectionTitle">Add object</div>
+      <div class="formGrid" style="margin-bottom:9px">
+        <label class="field wide">Spawn behavior
+          <select id="spawnMode">
+            <option value="incoming">Random encounter</option>
+            <option value="orbit" selected>Orbit spawn</option>
+          </select>
+        </label>
+      </div>
+      <div class="addGrid" id="addObjectGrid">
+        <button class="primaryBtn addObj" data-type="blackHole">Black hole<span class="mini">5–30 M☉ stellar BH</span></button>
+        <button class="primaryBtn addObj" data-type="neutronStar">Neutron star<span class="mini">1.1–2.2 M☉</span></button>
+        <button class="primaryBtn addObj" data-type="sunStar">Sun-sized star<span class="mini">0.7–1.4 M☉</span></button>
+        <button class="primaryBtn addObj" data-type="blackDwarf">Black dwarf<span class="mini">hypothetical remnant</span></button>
+        <button class="primaryBtn addObj" data-type="jupiter">Jupiter planet<span class="mini">0.3–3 MJ</span></button>
+        <button class="primaryBtn addObj" data-type="earth">Earth-like planet<span class="mini">0.5–2 M⊕</span></button>
+        <button class="primaryBtn addObj" data-type="moon">Moon<span class="mini">0.3–2 lunar masses</span></button>
+        <button class="primaryBtn addObj" data-type="comet">Comet<span class="mini">icy nucleus + stellar tail</span></button>
+        <button class="primaryBtn addObj" data-type="asteroid">Asteroid<span class="mini">small-body tracer</span></button>
+        <button class="ghostBtn customObjectBtn" id="newCustomObjectBtn" type="button">New object +<span class="mini">start from a built-in object template</span></button>
+      </div>
+      <div class="desc" id="spawnModeDesc">Random encounters enter from an arbitrary direction and can orbit, slingshot, collide, or escape.</div>
+
+      <div class="subpanel hiddenControl" id="orbitControls">
+        <div class="sectionTitle" style="margin-bottom:8px">Orbit spawn setup</div>
+        <div class="formGrid">
+          <label class="field wide">Orbit around
+            <select id="orbitPrimary"></select>
+          </label>
+          <label class="field wide">Orbit preset
+            <select id="orbitPreset">
+              <option value="circular" selected>Circular</option>
+              <option value="elliptical">Elliptical</option>
+              <option value="high">Highly elliptical</option>
+              <option value="cometary">Cometary</option>
+              <option value="hyperbolic">Hyperbolic flyby</option>
+            </select>
+          </label>
+          <label class="field">Periapsis (AU)<input id="periapsis" type="number" min="0.00001" step="0.01" value="1"></label>
+          <label class="field" id="apoField">Apoapsis (AU)<input id="apoapsis" type="number" min="0.00002" step="0.1" value="1"></label>
+          <label class="field">Inclination (°)<input id="orbitInclination" type="number" min="0" max="180" step="1" value="0"></label>
+          <label class="field hiddenControl" id="vinfField">v∞ (km/s)<input id="vinf" type="number" min="0.1" max="100" step="0.5" value="5"></label>
+        </div>
+        <div class="smallNote">Elliptical bodies spawn at a random orbital phase with the requested periapsis/apoapsis. Hyperbolic bodies arrive on an unbound trajectory with the requested periapsis.</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sectionTitle">Small-body populations</div>
+      <div class="formGrid">
+        <label class="field wide">Population
+          <select id="populationType">
+            <option value="belt">Asteroid belt</option>
+            <option value="oort">Oort cloud</option>
+          </select>
+        </label>
+        <label class="field wide">Orbit around
+          <select id="populationPrimary"></select>
+        </label>
+        <label class="field">Objects
+          <select id="populationCount">
+            <option>100</option><option>500</option><option selected>1000</option><option>5000</option>
+          </select>
+        </label>
+        <label class="field">Inner radius (AU)<input id="populationInner" type="number" min="0.01" step="0.1" value="2.1"></label>
+        <label class="field">Outer radius (AU)<input id="populationOuter" type="number" min="0.02" step="0.1" value="3.3"></label>
+        <label class="field">Thickness / tilt (°)<input id="populationTilt" type="number" min="0" max="180" step="1" value="4"></label>
+        <button class="primaryBtn wide" id="generatePopulation">Create asteroid belt</button>
+      </div>
+      <div class="desc" id="populationDesc">Creates a low-inclination distribution of small tracer bodies on near-Keplerian orbits. They feel major-body gravity but do not gravitationally perturb one another.</div>
+    </div>
+
+    <div class="section">
+      <div class="sectionTitle">Time</div>
+      <div class="switchline"><span style="font-size:13px">Rate</span><span class="valueBox" id="timeLabel">1× · 1.00 y/s</span></div>
+      <input id="timeScale" type="range" min="-2" max="3" value="0" step="0.01" />
+      <div class="desc">Log scale: 0.01× to 1000×. Here, 1× means one Earth year of simulation time passes per real second.</div>
+      <label class="row"><span>Impacts / tidal interactions</span><input id="impacts" type="checkbox" checked /></label>
+      <div class="desc">On: objects can merge, be swallowed, tidally disrupted, or fragment in energetic collisions. Off: bodies gravitationally interact but pass through one another.</div>
+    </div>
+
+    <div class="section">
+      <div class="sectionTitle">Camera</div>
+      <div class="switchline"><span style="font-size:13px">Zoom</span><span class="valueBox" id="zoomLabel">20 AU wide</span></div>
+      <input id="zoomRange" type="range" min="-8" max="4" value="0" step="0.01" />
+      <label class="row"><span>Trails</span><input id="trailsToggle" type="checkbox" checked /></label>
+      <div class="desc">On: show trails for normal simulated bodies. Off: keep only the currently focused/followed object's trail visible.</div>
+      <div class="switchline"><span style="font-size:13px">Trail history <span class="mini" style="display:inline">(sim time)</span></span><span class="valueBox" id="trailHistoryLabel">2.00 y</span></div>
+      <input id="trailHistory" type="range" min="-2" max="3" value="0.30103" step="0.01" />
+      <div class="desc">Keeps only this much <b>simulated</b> history. Changing the time multiplier no longer makes trails represent a longer span of the past.</div>
+      <label class="row"><span>Labels</span><input id="labelsToggle" type="checkbox" checked /></label>
+      <div class="desc">On: show the normal label set. Off: show a label only for the currently focused/followed object.</div>
+      <label class="row"><span>Reference grid</span><input id="gridToggle" type="checkbox" checked /></label>
+      <label class="row"><span>Auto-center barycenter</span><input id="centerToggle" type="checkbox" checked /></label>
+      <button class="ghostBtn" id="resetView" style="width:100%">Reset camera</button>
+      <div class="desc">Mouse wheel / trackpad zooms. Drag to pan. The maximum zoom-out fits all existing bodies if necessary. Every body keeps a minimum visible marker/dot; when multiple bodies project into the same few pixels, their markers separate on-screen without changing the physics.</div>
+    </div>
+
+  </div>
+
+  <div class="tabPane" id="tab-objects">
+    <div class="section">
+      <div class="sectionTitle">Existing objects <span class="badge" id="objectBadge">0</span></div>
+      <div class="smallNote objectInteractionHint">Click an object to see its properties, double-click an object to follow it in the simulation, and long-press an object to rename it.</div>
+      <div class="objectList" id="objectList"></div>
+    </div>
+    <div class="section" id="selectedCard">
+      <div class="sectionTitle">Selected object</div>
+      <div style="display:flex;align-items:center;gap:9px">
+        <span class="objSwatch" id="selectedSwatch"></span>
+        <div style="flex:1">
+          <div id="selectedName" style="font-weight:800;font-size:13px"></div>
+          <div id="selectedType" class="desc" style="margin-top:1px"></div>
+        </div>
+        <button class="iconBtn" id="followBtn" title="Follow this object">◎</button>
+      </div>
+      <div class="kv" id="selectedKV"></div>
+      <div class="vectorLegend"><span class="vectorVelocity">Travel / velocity arrow</span><span class="vectorForce">Net-force arrow</span></div>
+      <div class="hr"></div>
+      <button class="dangerBtn" id="deleteSelected" style="width:100%">Remove selected object</button>
+    </div>
+  </div>
+
+  <div class="tabPane" id="tab-calculator">
+    <div class="section">
+      <div class="sectionTitle">Impact predictor</div>
+      <div class="desc">Choose Object A. Object B is optional: choose it for the existing pair prediction, or leave B empty to scan A against every other surviving object. Calculations use a snapshot. Long calculations yield between chunks and can be stopped at any time.</div>
+      <div class="formGrid" style="margin-top:10px">
+        <label class="field wide">Object A
+          <div class="calcSearchWrap">
+            <input id="calcSearchA" type="search" placeholder="Search by object name or type" autocomplete="off">
+            <div class="calcSearchResults" id="calcResultsA"></div>
+          </div>
+        </label>
+        <label class="field wide">Object B <span class="mini" style="display:inline">(optional)</span>
+          <div class="calcSearchWrap">
+            <input id="calcSearchB" type="search" placeholder="Leave empty to scan Object A against all" autocomplete="off">
+            <div class="calcSearchResults" id="calcResultsB"></div>
+          </div>
+        </label>
+        <button class="ghostBtn wide" id="calcClearB" type="button">Clear Object B · scan A against all</button>
+        <label class="field wide">Maximum look-ahead
+          <select id="calcHorizon">
+            <option value="auto" selected>Auto · phone-safe maximum</option>
+            <option value="1">1 simulated year</option>
+            <option value="10">10 simulated years</option>
+            <option value="100">100 simulated years</option>
+            <option value="1000">1,000 simulated years</option>
+            <option value="10000">10,000 simulated years</option>
+          </select>
+        </label>
+        <div class="calcActionButtons wide">
+          <button class="primaryBtn" id="calcRun">Calculate impacts / closest encounters</button>
+          <button class="dangerBtn" id="calcStop" type="button" disabled>Stop</button>
+        </div>
+      </div>
+      <div class="smallNote">The current time-rate only changes how long the predicted event would take in real seconds. Explicit horizons (1–10,000 years) are honored exactly; if your chosen horizon exceeds the current phone-safe estimate, the simulator asks before starting. Auto mode still stops at the phone-safe compute budget.</div>
+      <div class="calcResult" id="calcStatus" aria-live="polite">Select Object A. Object B is optional.</div>
+    </div>
+    <div class="section hiddenControl" id="calcResultSection">
+      <div class="sectionTitle">Prediction result</div>
+      <div id="calcResultBody"></div>
+    </div>
+  </div>
+
+  <div class="tabPane" id="tab-info">
+    <div class="section">
+      <div class="sectionTitle">Model</div>
+      <div class="desc">
+        Gravity uses three-dimensional Newtonian N-body dynamics in astronomical units, solar masses, and Julian years with
+        <b>G = 4π² AU³ M☉⁻¹ yr⁻²</b>. The engine uses a hybrid symplectic scheme: general encounters use kick–drift–kick leapfrog integration, while strongly bound hierarchical orbits use exact two-body Kepler drift between external N-body kicks. This keeps close moons and planetary orbits stable even during aggressive fast-forward.
+      </div>
+      <div class="desc" style="margin-top:8px">
+        Black-hole radii use the Schwarzschild radius. Close passes can trigger a simplified tidal-disruption test. This is not a general-relativity spacetime solver, so effects such as frame dragging, exact gravitational-wave emission, and true ray-traced lensing are visual approximations.
+      </div>
+    </div>
+    <div class="section">
+      <div class="sectionTitle">Performance & accuracy</div>
+      <div class="desc">
+        The simulator dynamically chooses physics substeps based on time rate, major-body count, tracer count, and measured frame time. Major bodies fully interact. Individually added asteroids/comets are dynamic tracers that feel every major body. Generated belts/clouds use exact Kepler propagation around their chosen primary for speed and long-term stability; if another major body becomes a strong perturbation, affected members are promoted to dynamic tracers.
+      </div>
+      <div class="desc" style="margin-top:8px">
+        Physical collision radii remain independent of minimum on-screen marker size. Tracer–tracer impacts are intentionally omitted for performance, while tracer impacts with major bodies remain active. Generated population members are collision-checked against major bodies once per rendered frame. At wide scales, overlapping important markers are separated along their real projected orbital direction; this is display-only and never feeds back into the physics.
+      </div>
+    </div>
+    <div class="section">
+      <div class="sectionTitle">Presets</div>
+      <label class="field wide">Available preset
+        <select id="presetSelect">
+          <option value="">Loading presets…</option>
+        </select>
+      </label>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:7px;align-items:center;margin-top:8px">
+        <div class="desc" id="presetStatus">Any exported-state JSON placed in the deployed <b>presets</b> folder is added here by the included Netlify build step.</div>
+        <button class="ghostBtn" id="refreshPresetsBtn" type="button">Refresh</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sectionTitle">System</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+        <button class="ghostBtn" id="demoBtn">Load Solar System</button>
+        <button class="dangerBtn" id="clearBtn">Clear all</button>
+      </div>
+      <div class="desc" id="qualityText">Adaptive symplectic integration is balancing accuracy and frame rate.</div>
+    </div>
+
+    <div class="section">
+      <div class="sectionTitle">Save / restore simulation</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+        <button class="ghostBtn" id="exportStateBtn" type="button">Export state</button>
+        <button class="primaryBtn" id="importStateBtn" type="button">Import state</button>
+      </div>
+      <input id="importStateFile" type="file" accept=".json,application/json" style="display:none">
+      <div class="desc" id="stateIOStatus" style="margin-top:8px">
+        Export saves the complete simulation snapshot to a local JSON file. Import replaces the current system, camera, playback settings, populations, trails, selection, and other saved state.
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sectionTitle">Shortcuts</div>
+      <div class="kv">
+        <div>Pause</div><div>Space</div>
+        <div>Hide / show panel</div><div>H</div>
+        <div>Reset view</div><div>R</div>
+        <div>Delete selected</div><div>Delete</div>
+      </div>
+      <div class="footerHint">Tip: click a body in the simulation to inspect it. Double-click a body to follow it.</div>
+    </div>
+  </div>
+</div>
+
+<div id="timeTools" class="show">
+  <button class="floatBtn timeFloatBtn" id="slowTimeBtn" type="button" title="Halve playback rate" aria-label="Halve playback rate">½×</button>
+  <button class="floatBtn timeFloatBtn" id="timeCenterBtn" type="button" title="Pause simulation" aria-label="Pause simulation">⏸</button>
+  <button class="floatBtn timeFloatBtn" id="fastTimeBtn" type="button" title="Double playback rate" aria-label="Double playback rate">2×</button>
+</div>
+
+<div id="floatingTools" class="show">
+  <button class="floatBtn" id="zoomOutBtn" title="Zoom out — press or hold" aria-label="Zoom out">−</button>
+  <button class="floatBtn" id="zoomInBtn" title="Zoom in — press or hold" aria-label="Zoom in">＋</button>
+  <button class="floatBtn" id="gear" title="Show settings" aria-label="Show settings">⚙</button>
+</div>
+<div id="context"><b>Drag</b> pan · <b>Wheel</b> zoom · <b>Tap once</b> focus · <b>Tap again</b> follow</div>
+
+<div id="renameOverlay" aria-hidden="true">
+  <div class="renameSheet" role="dialog" aria-modal="true" aria-labelledby="renameTitle">
+    <div class="renameTitle" id="renameTitle">Rename object</div>
+    <div class="renameSub" id="renameSubtitle">Choose a new name for this body.</div>
+    <input id="renameInput" type="text" maxlength="80" autocomplete="off" spellcheck="false" />
+    <div class="renameActions">
+      <button class="ghostBtn" id="renameCancelBtn" type="button">Cancel</button>
+      <button class="primaryBtn" id="renameSaveBtn" type="button">Save name</button>
+    </div>
+  </div>
+</div>
+
+<div id="customObjectOverlay" aria-hidden="true">
+  <div class="renameSheet customSheet" role="dialog" aria-modal="true" aria-labelledby="customObjectTitle">
+    <div class="renameTitle" id="customObjectTitle">New reusable object template</div>
+    <div class="renameSub">Start from a built-in object template, edit its properties, then save it as a reusable Add Object button.</div>
+    <div class="formGrid">
+      <label class="field wide">Base template<select id="customBaseObject"></select></label>
+      <label class="field wide">Name<input id="customName" type="text" maxlength="80"></label>
+      <label class="field wide">Subtype / description<input id="customSubtype" type="text" maxlength="100"></label>
+      <label class="field">Mass (M☉)<input id="customMass" type="number" min="0.000000000001" step="any"></label>
+      <label class="field">Diameter (km)<input id="customDiameterKm" type="number" min="0.001" step="any"></label>
+      <label class="field">Temperature (K)<input id="customTemp" type="number" min="0" step="any" placeholder="none"></label>
+      <label class="field">Luminosity (L☉)<input id="customLuminosity" type="number" min="0" step="any"></label>
+      <label class="field">Spin value<input id="customSpin" type="number" step="any"></label>
+      <div class="field customColorControl">
+        <span>Appearance color</span>
+        <div class="customColorHead">
+          <span class="customColorPreview" id="customColorPreview"></span>
+          <input class="customColorHex" id="customColorHex" type="text" maxlength="7" value="#78B8FF" inputmode="text" aria-label="Color hex value">
+        </div>
+        <div class="colorSliderRow"><span>Hue</span><input class="colorRange" id="customHue" type="range" min="0" max="360" step="1" value="211"><span id="customHueValue">211°</span></div>
+        <div class="colorSliderRow"><span>Saturation</span><input class="colorRange" id="customSaturation" type="range" min="0" max="100" step="1" value="100"><span id="customSaturationValue">100%</span></div>
+        <div class="colorSliderRow"><span>Lightness</span><input class="colorRange" id="customLightness" type="range" min="0" max="100" step="1" value="74"><span id="customLightnessValue">74%</span></div>
+        <input id="customColor" type="hidden" value="#78b8ff">
+      </div>
+      <label class="field wide">Physics role
+        <select id="customPhysicsRole"><option value="major">Full N-body body</option><option value="tracer">Lightweight tracer</option></select>
+      </label>
+      <div class="physicsRoleHelp"><b>Full N-body:</b> both feels gravity and contributes its own gravity to other bodies. Use for stars, planets, moons, black holes, and anything whose mass should change the system. More expensive with many objects.<br><b>Lightweight tracer:</b> feels gravity from full N-body objects but its own gravity is ignored by the rest of the system. It can still move through the system and participate in enabled impacts. Best for tiny comets/asteroids or large swarms because it is much cheaper.</div>
+    </div>
+    <div class="smallNote">Saving does not spawn anything yet. The new button appears under Add Object. Every tap later creates a fresh copy using whatever Random Encounter / Orbit Spawn settings are active at that moment.</div>
+    <div class="renameActions">
+      <button class="ghostBtn" id="customCancelBtn" type="button">Cancel</button>
+      <button class="primaryBtn" id="customSaveBtn" type="button">Save template</button>
+    </div>
+  </div>
+</div>
+
+<div id="calcWarningOverlay" aria-hidden="true">
+  <div class="renameSheet" role="dialog" aria-modal="true" aria-labelledby="calcWarningTitle">
+    <div class="renameTitle" id="calcWarningTitle">Long calculation</div>
+    <div class="warningText" id="calcWarningText"></div>
+    <div class="renameActions">
+      <button class="ghostBtn" id="calcWarningCancel" type="button">Cancel</button>
+      <button class="primaryBtn" id="calcWarningContinue" type="button">Calculate anyway</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+
+// ---------- Physical constants in AU / solar masses / Julian years ----------
+const TAU = Math.PI * 2;
+const G = 4 * Math.PI * Math.PI;            // AU^3 / (M_sun * yr^2)
+const AU_KM = 149_597_870.7;
+const YEAR_S = 31_557_600;
+const C_AUYR = 299_792.458 * YEAR_S / AU_KM;
+const RSUN_AU = 696_340 / AU_KM;
+const REARTH_AU = 6_371 / AU_KM;
+const RJUP_AU = 69_911 / AU_KM;
+const RMOON_AU = 1_737.4 / AU_KM;
+const RMARS_AU = 3_389.5 / AU_KM;
+const RMERCURY_AU = 2_439.7 / AU_KM;
+const RVENUS_AU = 6_051.8 / AU_KM;
+const RSATURN_AU = 58_232 / AU_KM;
+const RURANUS_AU = 25_362 / AU_KM;
+const RNEPTUNE_AU = 24_622 / AU_KM;
+const M_EARTH = 3.0034896e-6;
+const M_JUP = 9.5458e-4;
+const M_MOON = 3.694e-8;
+const M_MARS = 3.22715e-7;
+const M_MERCURY = 1.66012e-7;
+const M_VENUS = 2.44784e-6;
+const M_SATURN = 2.85815e-4;
+const M_URANUS = 4.36624e-5;
+const M_NEPTUNE = 5.15139e-5;
+const MIN_MASS = 1e-22;
+const MAX_BODIES = 8000;
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const canvas = $('#sim');
+const ctx = canvas.getContext('2d', { alpha:false, desynchronized:true });
+
+let W=innerWidth, H=innerHeight, DPR=Math.min(devicePixelRatio||1, 2);
+let bodies = [];
+let effects = [];
+let nextId = 1;
+let paused = false;
+let impactsEnabled = true;
+let trailsEnabled = true;
+const TRAIL_TARGET_POINTS = 192;
+const TRAIL_MAX_POINTS = 240;
+let labelsEnabled = true;
+let gridEnabled = true;
+let autoCenter = true;
+let selectedId = null;
+let followedId = null;
+let simTime = 0;
+let lastNow = performance.now();
+let fpsEMA = 60;
+let frameMsEMA = 16.7;
+let lastUIUpdate = 0;
+let toastTimer = 0;
+let dragging = false, dragX=0, dragY=0, dragMoved=false;
+let cam = {x:0,y:0,zoom:1}; // zoom multiplier. base view ~20AU across.
+let pan = {x:0,y:0};
+let starField = [];
+let displayPositions = new Map();
+let maxZoomOutActive = false;
+let lastObjectTapId = null, lastObjectTapTime = 0, objectTapTimer=null;
+let suppressObjectRowTapUntil = 0;
+let renameBodyId = null;
+let populations = [];
+let nextPopulationId = 1;
+let expandedPopulations = new Map();
+let gesturePointers = new Map();
+let gestureMode = null;
+let gestureStart = null;
+let gestureMoved = false;
+let lastPopulationRealUpdate = 0;
+let analyticUpdateCursor = 0;
+let calcSelection = {a:null,b:null};
+let predictionJobToken = 0;
+let activePredictionToken = 0;
+let pendingCalcWarningAction = null;
+let timedRateBoost = null;
+let manualRateMultiplier = 1;
+
+const typeInfo = {
+  blackHole:{label:'Black hole'},
+  neutronStar:{label:'Neutron star'},
+  sunStar:{label:'Sun-sized star'},
+  blackDwarf:{label:'Black dwarf'},
+  jupiter:{label:'Jupiter-sized planet'},
+  earth:{label:'Earth-like planet'},
+  mercury:{label:'Mercury'},
+  venus:{label:'Venus'},
+  mars:{label:'Mars-like planet'},
+  saturn:{label:'Saturn'},
+  uranus:{label:'Uranus'},
+  neptune:{label:'Neptune'},
+  moon:{label:'Moon'},
+  comet:{label:'Comet'},
+  asteroid:{label:'Asteroid'},
+  oort:{label:'Oort-cloud object'},
+  fragment:{label:'Collision fragment'}
+};
+
+const palettes = {
+  stars: ['#fff5d6','#fff1bf','#f7f0ff','#eaf5ff','#ffe5c4'],
+  earth: ['#4aa2e8','#3d8dd7','#56a7cf','#3f96c7'],
+  mars: ['#c76543','#b85437','#d47750','#9f4935'],
+  jupiter: ['#d5aa7a','#c89568','#e0b889','#b9825b','#d6c0a0'],
+  moon: ['#b9bcc4','#9ba0a8','#cbc8bf','#8e939b'],
+  dwarf: ['#635e67','#7a6e75','#554f58','#8a7777'],
+  neutron: ['#c8edff','#e2f7ff','#bcdcff'],
+  comet: ['#d7efff','#b9e4ff','#e9fbff','#cce8e7'],
+  asteroid: ['#91847a','#746d69','#a18e7b','#6f6861','#b09a85']
+};
+
+function rand(a=1,b=0){ return b + Math.random()*(a-b); }
+function randLog(min,max){ return Math.exp(rand(Math.log(max), Math.log(min))); }
+function pick(a){ return a[(Math.random()*a.length)|0]; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function hypot(x,y){ return Math.sqrt(x*x+y*y); }
+function hexToRgb(hex){
+  const h=hex.replace('#','');
+  const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);
+  return [(n>>16)&255,(n>>8)&255,n&255];
+}
+function rgba(hex,a){ const [r,g,b]=hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; }
+function rgbToHsl(r,g,b){
+  r/=255;g/=255;b/=255;const max=Math.max(r,g,b),min=Math.min(r,g,b);let h=0,s=0,l=(max+min)/2;
+  if(max!==min){const d=max-min;s=l>.5?d/(2-max-min):d/(max+min);if(max===r)h=(g-b)/d+(g<b?6:0);else if(max===g)h=(b-r)/d+2;else h=(r-g)/d+4;h*=60;}
+  return {h,s:s*100,l:l*100};
+}
+function hslToHex(h,s,l){
+  h=((h%360)+360)%360;s=clamp(s,0,100)/100;l=clamp(l,0,100)/100;
+  const c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),m=l-c/2;let r=0,g=0,b=0;
+  if(h<60){r=c;g=x;}else if(h<120){r=x;g=c;}else if(h<180){g=c;b=x;}else if(h<240){g=x;b=c;}else if(h<300){r=x;b=c;}else{r=c;b=x;}
+  const hx=v=>Math.round((v+m)*255).toString(16).padStart(2,'0');return `#${hx(r)}${hx(g)}${hx(b)}`;
+}
+function normalizeHexColor(value){const v=String(value||'').trim();if(/^#[0-9a-f]{6}$/i.test(v))return v.toLowerCase();if(/^[0-9a-f]{6}$/i.test(v))return '#'+v.toLowerCase();return null;}
+function formatNum(v, digits=3){
+  if(!isFinite(v)) return '—';
+  const av=Math.abs(v);
+  if((av>0 && av<1e-3)||av>=1e5) return v.toExponential(2);
+  return v.toLocaleString(undefined,{maximumFractionDigits:digits});
+}
+function formatMass(m){
+  if(m >= 0.05) return `${formatNum(m,4)} M☉`;
+  if(m >= M_JUP*0.08) return `${formatNum(m/M_JUP,3)} MJ`;
+  if(m >= M_EARTH*0.05) return `${formatNum(m/M_EARTH,3)} M⊕`;
+  if(m >= M_MOON*0.001) return `${formatNum(m/M_MOON,3)} M☾`;
+  const kg=m*1.98847e30;
+  return kg>=1e9?`${formatNum(kg,2)} kg`:`${formatNum(kg,4)} kg`;
+}
+function formatRadius(r){
+  const km = r*AU_KM;
+  if(km < 1e6) return `${formatNum(km,1)} km`;
+  return `${formatNum(r,4)} AU`;
+}
+function formatDistance(d){
+  if(d < 0.01) return `${formatNum(d*AU_KM/1e6,2)} million km`;
+  if(d < 10000) return `${formatNum(d,3)} AU`;
+  return `${formatNum(d/63241.077,3)} ly`;
+}
+function showToast(msg){
+  const el=$('#toast'); el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),1700);
+}
+function resize(){
+  W=innerWidth;H=innerHeight;DPR=Math.min(devicePixelRatio||1,2);
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  buildStarField();
+}
+addEventListener('resize', resize);
+
+function buildStarField(){
+  const n=Math.floor((W*H)/6500);
+  starField=Array.from({length:n},()=>({
+    x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.2+.15,a:Math.random()*.7+.18,
+    phase:Math.random()*TAU,depth:Math.random()
+  }));
+}
+
+// ---------- Object generation ----------
+function schwarzschildRadiusAU(mass){ return 2*G*mass/(C_AUYR*C_AUYR); }
+function blackDwarfRadiusAU(mass){
+  // A black dwarf is the hypothetical cold endpoint of a white dwarf, so use
+  // the zero-temperature degenerate-electron mass-radius relation (Nauenberg-like).
+  // Higher-mass remnants are smaller; M_ch is the Chandrasekhar mass in solar masses.
+  const M_ch=1.44,m=clamp(mass,.17,1.38);
+  const term=Math.pow(M_ch/m,2/3)-Math.pow(m/M_ch,2/3);
+  return 0.0112*Math.sqrt(Math.max(term,1e-8))*RSUN_AU;
+}
+function randomBlackDwarfMass(){
+  // Most field white dwarfs cluster near ~0.6 M☉, with a smaller high-mass tail.
+  // Black dwarfs do not yet exist in the real Universe; this samples plausible
+  // cooled white-dwarf remnants rather than an independent arbitrary mass range.
+  if(Math.random()<.12)return rand(.80,1.20);
+  let sum=0;for(let i=0;i<8;i++)sum+=Math.random();
+  return clamp(.62+(sum-4)*.095,.45,.90);
+}
+
+function makeBody(type, x=0, y=0, vx=0, vy=0, name=null, z=0, vz=0){
+  let mass, radius, color, temp=null, spin=rand(-1,1), subtype='', luminosity=0, isTracer=false;
+  if(type==='blackHole'){
+    mass=randLog(5,30); radius=schwarzschildRadiusAU(mass); color='#07080d'; subtype='Stellar-mass black hole';
+  } else if(type==='neutronStar'){
+    mass=rand(1.1,2.2); radius=rand(10.5,13.5)/AU_KM; color=pick(palettes.neutron); temp=randLog(3e5,1.2e6); subtype='Compact neutron star'; luminosity=.02;
+  } else if(type==='sunStar'){
+    mass=rand(0.7,1.4); radius=Math.pow(mass,.8)*rand(.92,1.08)*RSUN_AU; color=pick(palettes.stars); temp=5772*Math.pow(mass,.45)*rand(.94,1.06); subtype='Main-sequence-like star'; luminosity=Math.pow(mass,3.5);
+  } else if(type==='blackDwarf'){
+    mass=randomBlackDwarfMass();
+    // A few percent composition scatter prevents identical radii at equal mass
+    // without breaking the inverse white-dwarf mass-radius relationship.
+    radius=blackDwarfRadiusAU(mass)*rand(.97,1.03);
+    color=pick(palettes.dwarf);temp=randLog(3,120);subtype='Hypothetical cooled white-dwarf remnant';
+    luminosity=Math.pow(radius/RSUN_AU,2)*Math.pow(temp/5772,4);
+  } else if(type==='jupiter'){
+    mass=randLog(.3,3)*M_JUP; radius=rand(.85,1.2)*RJUP_AU; color=pick(palettes.jupiter); temp=rand(90,220); subtype='Gas giant';
+  } else if(type==='earth'){
+    mass=randLog(.5,2)*M_EARTH; radius=Math.pow(mass/M_EARTH,.27)*REARTH_AU*rand(.94,1.06); color=pick(palettes.earth); temp=rand(220,330); subtype='Rocky planet';
+  } else if(type==='mars'){
+    mass=rand(.7,1.3)*M_MARS; radius=rand(.94,1.06)*RMARS_AU; color=pick(palettes.mars); temp=rand(170,260); subtype='Cold rocky planet';
+  } else if(type==='moon'){
+    mass=randLog(.3,2)*M_MOON; radius=Math.pow(mass/M_MOON,.28)*RMOON_AU*rand(.93,1.07); color=pick(palettes.moon); temp=rand(80,280); subtype='Rocky moon';
+  } else if(type==='comet' || type==='oort'){
+    const radiusKm=randLog(type==='oort'?.15:.5,type==='oort'?12:25);
+    const rho=rand(350,850); const kg=4/3*Math.PI*Math.pow(radiusKm*1000,3)*rho;
+    mass=kg/1.98847e30; radius=radiusKm/AU_KM; color=pick(palettes.comet); temp=rand(25,120);
+    subtype=type==='oort'?'Distant icy small body':'Icy comet nucleus'; isTracer=true;
+  } else if(type==='asteroid'){
+    const radiusKm=randLog(.08,480); const rho=rand(1800,4200); const kg=4/3*Math.PI*Math.pow(radiusKm*1000,3)*rho;
+    mass=kg/1.98847e30; radius=radiusKm/AU_KM; color=pick(palettes.asteroid); temp=rand(80,330); subtype='Rocky small body'; isTracer=true;
+  } else {
+    mass=1e-8; radius=300/AU_KM; color='#a8a0a0'; subtype='Collision fragment';
+  }
+  const id=nextId++;
+  return {
+    id,type,name:name||`${typeInfo[type]?.label||'Body'} ${id}`,
+    mass,radius,x,y,z,vx,vy,vz,ax:0,ay:0,az:0,color,temp,spin,subtype,luminosity,isTracer,analyticOrbit:null,keplerAnchorId:null,
+    populationId:null,populationKind:null,isRenamed:false,trail:[],trailClock:0,age:0,phase:Math.random()*TAU,alive:true,
+    createdAt:simTime,impactCount:0,mergedFrom:0
+  };
+}
+
+function barycenter(){
+  let m=0,x=0,y=0,z=0,vx=0,vy=0,vz=0;
+  for(const b of bodies){ if(!b.alive || b.isTracer) continue; m+=b.mass; x+=b.x*b.mass; y+=b.y*b.mass; z+=b.z*b.mass; vx+=b.vx*b.mass; vy+=b.vy*b.mass; vz+=b.vz*b.mass; }
+  if(m<=0){
+    for(const b of bodies){ if(!b.alive)continue; const w=Math.max(b.mass,1e-20);m+=w;x+=b.x*w;y+=b.y*w;z+=b.z*w;vx+=b.vx*w;vy+=b.vy*w;vz+=b.vz*w; }
+  }
+  if(m<=0) return {x:0,y:0,z:0,vx:0,vy:0,vz:0,m:0};
+  return {x:x/m,y:y/m,z:z/m,vx:vx/m,vy:vy/m,vz:vz/m,m};
+}
+
+function systemExtent(){
+  const bc=barycenter(); let max=1;
+  for(const b of bodies) max=Math.max(max,Math.sqrt((b.x-bc.x)**2+(b.y-bc.y)**2+(b.z-bc.z)**2));
+  return max;
+}
+
+function focusAndFollowSpawnedBody(b){
+  if(!b)return;
+  selectedId=b.id;followedId=b.id;autoCenter=false;maxZoomOutActive=false;pan.x=pan.y=0;
+  $('#centerToggle').checked=false;
+  cam.x=b.x;cam.y=b.y;
+  hidePanel(true);updateSelected();refreshObjectsUI(true);
+}
+function fitPopulationToView(pid){
+  updateAnalyticPopulations(simTime,true);
+  const members=bodies.filter(b=>b.alive&&b.populationId===pid);if(!members.length)return;
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  for(const b of members){minX=Math.min(minX,b.x);maxX=Math.max(maxX,b.x);minY=Math.min(minY,b.y);maxY=Math.max(maxY,b.y);}
+  const cx=(minX+maxX)/2,cy=(minY+maxY)/2,dx=Math.max(maxX-minX,1e-8),dy=Math.max(maxY-minY,1e-8),base=Math.min(W,H)/20;
+  const fitX=(W*.90)/(dx*base),fitY=(H*.78)/(dy*base);
+  cam.zoom=clamp(Math.min(fitX,fitY),1e-14,1e4);cam.x=cx;cam.y=cy;pan.x=pan.y=0;
+  selectedId=null;followedId=null;autoCenter=false;maxZoomOutActive=false;$('#centerToggle').checked=false;
+  syncZoomSlider();updateLabels();hidePanel(true);refreshObjectsUI(true);
+}
+function placeIncomingBody(b){
+  const bc=barycenter();
+  if(bodies.length===0){b.x=rand(-1,1);b.y=rand(-1,1);b.z=rand(-.1,.1);b.vx=rand(-.2,.2);b.vy=rand(-.2,.2);b.vz=rand(-.05,.05);return true;}
+  const span=Math.max(systemExtent(),1),viewHalf=10/cam.zoom;
+  const spawnR=Math.max(span*1.8,Math.min(viewHalf*.9,span*12+30),2)*rand(1,1.7);
+  const ang=Math.random()*TAU,impact=rand(-.65,.65)*Math.min(spawnR*.55,Math.max(span,1)*1.2);
+  const tx=bc.x+Math.cos(ang+Math.PI/2)*impact,ty=bc.y+Math.sin(ang+Math.PI/2)*impact;
+  b.x=bc.x+Math.cos(ang)*spawnR;b.y=bc.y+Math.sin(ang)*spawnR;b.z=bc.z+rand(-.08,.08)*spawnR;
+  let dx=tx-b.x,dy=ty-b.y,dz=bc.z-b.z,d=Math.sqrt(dx*dx+dy*dy+dz*dz)||1;dx/=d;dy/=d;dz/=d;
+  const vEsc=Math.sqrt(Math.max(0,2*G*Math.max(bc.m,1e-8)/spawnR)),speed=vEsc*rand(b.type==='comet'||b.type==='asteroid'?.55:.48,1.22),tang=rand(-.18,.18)*speed;
+  b.vx=bc.vx+dx*speed-dy*tang;b.vy=bc.vy+dy*speed+dx*tang;b.vz=bc.vz+dz*speed;
+  return true;
+}
+function placeOrbitingBody(b){
+  const primary=bodies.find(o=>o.id===+$('#orbitPrimary').value&&o.alive);
+  if(!primary){showToast('Add or choose a primary object first');return false;}
+  const preset=$('#orbitPreset').value,rp=Math.max(1e-6,+$('#periapsis').value||.4),inc=clamp(+$('#orbitInclination').value||0,0,180);
+  let ra=Math.max(rp*1.001,+$('#apoapsis').value||rp*2);
+  if(preset==='hyperbolic')placeHyperbolic(b,primary,rp,Math.max(.1,+$('#vinf').value||5),inc);
+  else{
+    if(preset==='circular')ra=rp;
+    placeElliptical(b,primary,rp,ra,inc);
+    if(!primary.isTracer&&primary.mass>Math.max(b.mass*8,1e-14))b.keplerAnchorId=primary.id;
+  }
+  return true;
+}
+function commitSpawnedBody(b,message){
+  bodies.push(b);addEffect(b.x,b.y,'spawn',b.color,.35);refreshPrimarySelectors();focusAndFollowSpawnedBody(b);showToast(message||`${b.name} added`);
+}
+function addIncoming(type){
+  if(bodies.length>=MAX_BODIES){showToast(`Body limit ${MAX_BODIES} reached`);return;}
+  const b=makeBody(type);if(!placeIncomingBody(b))return;commitSpawnedBody(b,`${b.name} added`);
+}
+
+function solveEccentricAnomaly(M,e){
+  let E=e<.8?M:Math.PI;
+  for(let k=0;k<8;k++) E-= (E-e*Math.sin(E)-M)/(1-e*Math.cos(E));
+  return E;
+}
+function orbitalBasis(node,inc,u){
+  const co=Math.cos(node),so=Math.sin(node),ci=Math.cos(inc),si=Math.sin(inc),cu=Math.cos(u),su=Math.sin(u);
+  return {
+    er:{x:co*cu-so*su*ci,y:so*cu+co*su*ci,z:su*si},
+    et:{x:-co*su-so*cu*ci,y:-so*su+co*cu*ci,z:cu*si}
+  };
+}
+function placeElliptical(body,primary,rp,ra,inclinationDeg=null,eOverride=null,aOverride=null){
+  const mu=G*Math.max(primary.mass,1e-12);
+  let a=aOverride??((rp+ra)/2),e=eOverride??clamp((ra-rp)/(ra+rp),0,.9995);
+  const M=Math.random()*TAU,E=solveEccentricAnomaly(M,e);
+  const f=2*Math.atan2(Math.sqrt(1+e)*Math.sin(E/2),Math.sqrt(1-e)*Math.cos(E/2));
+  const r=a*(1-e*Math.cos(E)),p=a*(1-e*e),h=Math.sqrt(mu*p);
+  const vr=mu/h*e*Math.sin(f),vt=h/r;
+  const inc=(inclinationDeg==null?rand(0,8):inclinationDeg)*Math.PI/180,node=Math.random()*TAU,arg=Math.random()*TAU;
+  const {er,et}=orbitalBasis(node,inc,arg+f);
+  body.x=primary.x+er.x*r;body.y=primary.y+er.y*r;body.z=primary.z+er.z*r;
+  body.vx=primary.vx+er.x*vr+et.x*vt;body.vy=primary.vy+er.y*vr+et.y*vt;body.vz=primary.vz+er.z*vr+et.z*vt;
+}
+function placeHyperbolic(body,primary,q,vinfKmS,inclinationDeg=null){
+  const mu=G*Math.max(primary.mass,1e-12),vinf=vinfKmS*YEAR_S/AU_KM;
+  const e=1+q*vinf*vinf/mu,p=q*(1+e),h=Math.sqrt(mu*p),fmax=Math.acos(-1/e),f=-fmax*rand(.62,.88);
+  const r=p/(1+e*Math.cos(f)),vr=mu/h*e*Math.sin(f),vt=h/r;
+  const inc=(inclinationDeg==null?rand(0,180):inclinationDeg)*Math.PI/180,node=Math.random()*TAU,arg=Math.random()*TAU;
+  const {er,et}=orbitalBasis(node,inc,arg+f);
+  body.x=primary.x+er.x*r;body.y=primary.y+er.y*r;body.z=primary.z+er.z*r;
+  body.vx=primary.vx+er.x*vr+et.x*vt;body.vy=primary.vy+er.y*vr+et.y*vt;body.vz=primary.vz+er.z*vr+et.z*vt;
+}
+function addOrbiting(type){
+  if(bodies.length>=MAX_BODIES){showToast(`Body limit ${MAX_BODIES} reached`);return;}
+  const b=makeBody(type);if(!placeOrbitingBody(b))return;commitSpawnedBody(b,`${b.name} placed in ${$('#orbitPreset').value} orbit`);
+}
+function addObjectByMode(type){
+  if($('#spawnMode').value==='orbit'&&bodies.length)addOrbiting(type);else addIncoming(type);
+}
+
+function setAnalyticOrbit(body,primary,a,e,inclinationDeg){
+  const inc=inclinationDeg*Math.PI/180,node=Math.random()*TAU,arg=Math.random()*TAU;
+  // Precompute fixed orbital-plane basis vectors. Runtime propagation then needs only eccentric-anomaly trig.
+  const basis=orbitalBasis(node,inc,arg);
+  body.analyticOrbit={primaryId:primary.id,a,e,inc,node,arg,M0:Math.random()*TAU,epoch:simTime,nBase:Math.sqrt(G/(a*a*a)),sqrt1me2:Math.sqrt(Math.max(0,1-e*e)),P:basis.er,Q:basis.et};
+  updateAnalyticBody(body,primary,simTime);
+}
+function updateAnalyticBody(body,primary,time){
+  const o=body.analyticOrbit;if(!o)return;const n=o.nBase*Math.sqrt(Math.max(primary.mass,1e-12));let M=(o.M0+n*(time-o.epoch))%TAU;if(M<0)M+=TAU;
+  // Fast Kepler solve: good initial estimate plus 1 Newton step for belts / 3 for eccentric cloud orbits.
+  const sm=Math.sin(M),cm=Math.cos(M);let E=M+o.e*sm*(1+o.e*cm),iters=o.e<.2?1:3;
+  for(let k=0;k<iters;k++){const se=Math.sin(E),ce=Math.cos(E);E-=(E-o.e*se-M)/(1-o.e*ce);}
+  const se=Math.sin(E),ce=Math.cos(E),den=Math.max(1e-9,1-o.e*ce),xp=o.a*(ce-o.e),yp=o.a*o.sqrt1me2*se,dEdt=n/den,vxp=-o.a*se*dEdt,vyp=o.a*o.sqrt1me2*ce*dEdt,P=o.P,Q=o.Q;
+  body.x=primary.x+P.x*xp+Q.x*yp;body.y=primary.y+P.y*xp+Q.y*yp;body.z=primary.z+P.z*xp+Q.z*yp;
+  body.vx=primary.vx+P.x*vxp+Q.x*vyp;body.vy=primary.vy+P.y*vxp+Q.y*vyp;body.vz=primary.vz+P.z*vxp+Q.z*vyp;
+}
+function updateAnalyticPopulations(time,force=false){
+  const analytic=bodies.filter(b=>b.alive&&b.analyticOrbit);if(!analytic.length)return;
+  const majors=bodies.filter(b=>b.alive&&!b.isTracer);if(!majors.length)return;const majorById=new Map(majors.map(m=>[m.id,m]));
+  const focus=bodies.find(b=>(b.id===followedId||b.id===selectedId)&&b.analyticOrbit&&b.alive);if(focus){const p=majorById.get(focus.analyticOrbit.primaryId);if(p)updateAnalyticBody(focus,p,time);}
+  const chunks=force?1:analytic.length>3000?6:analytic.length>1200?4:analytic.length>500?2:1,chunkSize=Math.ceil(analytic.length/chunks),start=force?0:(analyticUpdateCursor%analytic.length),count=force?analytic.length:Math.min(chunkSize,analytic.length);
+  for(let k=0;k<count;k++){
+    const b=analytic[(start+k)%analytic.length];if(b===focus&&!force)continue;const primary=majorById.get(b.analyticOrbit?.primaryId);if(!primary){b.analyticOrbit=null;continue;}updateAnalyticBody(b,primary,time);
+    const pdx=primary.x-b.x,pdy=primary.y-b.y,pdz=primary.z-b.z,pr2=pdx*pdx+pdy*pdy+pdz*pdz+1e-18,primaryAccel=G*primary.mass/pr2;
+    for(const m of majors){
+      if(m===primary)continue;const dx=m.x-b.x,dy=m.y-b.y,dz=m.z-b.z,r2=dx*dx+dy*dy+dz*dz+1e-18;
+      if(impactsEnabled&&r2<=collisionRadius(b,m)**2){absorbTracer(m,b);break;}
+      if(G*m.mass/r2>primaryAccel*.22){b.analyticOrbit=null;break;}
+    }
+    if(b.alive&&b.analyticOrbit&&impactsEnabled&&pr2<=collisionRadius(b,primary)**2)absorbTracer(primary,b);
+  }
+  if(!force)analyticUpdateCursor=(start+count)%Math.max(1,analytic.length);bodies=bodies.filter(b=>b.alive&&b.mass>MIN_MASS);
+}
+function populationName(kind,id){return kind==='belt'?`Asteroid Belt ${id}`:`Oort Cloud ${id}`;}
+function generatePopulation(){
+  const kind=$('#populationType').value,primary=bodies.find(b=>b.id===+$('#populationPrimary').value && b.alive);
+  if(!primary){showToast('Choose a primary body for the population');return;}
+  let count=clamp(parseInt($('#populationCount').value)||1000,1,5000);
+  count=Math.min(count,MAX_BODIES-bodies.length);if(count<=0){showToast(`Body limit ${MAX_BODIES} reached`);return;}
+  let inner=Math.max(.001,+$('#populationInner').value||2.1),outer=Math.max(inner*1.01,+$('#populationOuter').value||3.3);
+  const tilt=clamp(+$('#populationTilt').value||0,0,180),pid=nextPopulationId++;
+  populations.push({id:pid,kind,name:populationName(kind,pid),primaryId:primary.id,createdAt:simTime});
+  for(let i=0;i<count;i++){
+    const b=makeBody(kind==='belt'?'asteroid':'oort');b.populationId=pid;b.populationKind=kind;
+    if(kind==='belt'){
+      const a=rand(inner,outer),e=rand(0,.12),inc=Math.abs(rand(-tilt,tilt));setAnalyticOrbit(b,primary,a,e,inc);
+    }else{
+      const a=randLog(inner,outer),e=rand(.05,.96),inc=Math.acos(rand(-1,1))*180/Math.PI;setAnalyticOrbit(b,primary,a,e,inc);
+    }
+    bodies.push(b);
+  }
+  expandedPopulations.set(pid,0);refreshObjectsUI(true);refreshPrimarySelectors();fitPopulationToView(pid);showToast(`${populationName(kind,pid)} created · ${count} objects`);
+}
+
+// ---------- Physics ----------
+function buildDynamicSets(){
+  const dynamic=[],majors=[],tracers=[];for(const b of bodies){if(!b.alive||b.analyticOrbit)continue;dynamic.push(b);if(b.isTracer)tracers.push(b);else majors.push(b);}return {dynamic,majors,tracers};
+}
+function anchorPrimaryOf(b,byId){return b?.keplerAnchorId==null?null:byId.get(b.keplerAnchorId)||null;}
+function relativeOrbitStats(child,primary){
+  const rx=child.x-primary.x,ry=child.y-primary.y,rz=child.z-primary.z,r=Math.sqrt(rx*rx+ry*ry+rz*rz);
+  const vx=child.vx-primary.vx,vy=child.vy-primary.vy,vz=child.vz-primary.vz,v2=vx*vx+vy*vy+vz*vz;
+  if(!(r>0))return null;
+  const mu=G*Math.max(primary.mass+child.mass,1e-15),energy=.5*v2-mu/r;
+  if(!(energy<0))return {bound:false,r,energy,mu,period:Infinity,a:Infinity};
+  const a=-mu/(2*energy),period=TAU*Math.sqrt(a*a*a/mu);
+  return {bound:true,r,energy,mu,a,period};
+}
+function keplerDescendsFrom(body,ancestorId,byId){
+  let p=body,guard=0;while(p?.keplerAnchorId!=null&&guard++<12){if(p.keplerAnchorId===ancestorId)return true;p=byId.get(p.keplerAnchorId);}return false;
+}
+function keplerTideRatio(child,primary,majors){
+  const rx=child.x-primary.x,ry=child.y-primary.y,rz=child.z-primary.z,r2=rx*rx+ry*ry+rz*rz+1e-30;
+  const central=G*Math.max(primary.mass+child.mass,1e-15)/r2;
+  if(!(central>0))return Infinity;
+  let strongest=0;const byId=new Map(majors.map(m=>[m.id,m]));
+  for(const m of majors){
+    // A moon of Jupiter is internal to the Jupiter subsystem and should not be
+    // mistaken for an external tide capable of breaking Jupiter's solar anchor.
+    if(!m.alive||m.id===primary.id||m.id===child.id||keplerDescendsFrom(m,child.id,byId))continue;
+    let dx=m.x-child.x,dy=m.y-child.y,dz=m.z-child.z,d2=dx*dx+dy*dy+dz*dz+1e-24,inv=1/Math.sqrt(d2),fc=G*m.mass*inv/d2;
+    const acx=fc*dx,acy=fc*dy,acz=fc*dz;
+    dx=m.x-primary.x;dy=m.y-primary.y;dz=m.z-primary.z;d2=dx*dx+dy*dy+dz*dz+1e-24;inv=1/Math.sqrt(d2);const fp=G*m.mass*inv/d2;
+    const ddx=acx-fp*dx,ddy=acy-fp*dy,ddz=acz-fp*dz;
+    strongest=Math.max(strongest,Math.sqrt(ddx*ddx+ddy*ddy+ddz*ddz));
+  }
+  return strongest/central;
+}
+function refreshKeplerAnchors(dynamic,majors){
+  const byId=new Map(dynamic.map(b=>[b.id,b]));
+  // First release anchors that have become genuinely unbound or strongly tidally perturbed.
+  for(const b of dynamic){
+    if(b.keplerAnchorId==null)continue;
+    const p=byId.get(b.keplerAnchorId),stats=p&&p.alive&&!p.isTracer?relativeOrbitStats(b,p):null;
+    if(!stats?.bound || p.mass<Math.max(b.mass*8,1e-14) || keplerTideRatio(b,p,majors)>.32 || stats.r<=collisionRadius(b,p)*1.03){
+      b.keplerAnchorId=null;
+    }
+  }
+  // Automatically protect stable hierarchical orbits too. This means captured moons
+  // and imported older states gain the same high-speed stability without special cases.
+  for(const b of dynamic){
+    if(b.keplerAnchorId!=null||!b.alive)continue;
+    let best=null,bestScore=Infinity;
+    for(const p of majors){
+      if(p.id===b.id||!p.alive||p.mass<Math.max(b.mass*20,1e-14))continue;
+      const stats=relativeOrbitStats(b,p);if(!stats?.bound||stats.r<=collisionRadius(b,p)*1.08)continue;
+      const tide=keplerTideRatio(b,p,majors);if(tide>.12)continue;
+      // Favor the most locally dominant primary rather than merely the largest mass.
+      const score=tide+stats.r/Math.max(stats.a,1e-30)*1e-5;
+      if(score<bestScore){bestScore=score;best=p;}
+    }
+    if(best)b.keplerAnchorId=best.id;
+  }
+  // Prevent malformed/cyclic imported anchors. Mass hierarchy should already make
+  // cycles impossible, but this also keeps corrupt state files from locking the drift.
+  for(const b of dynamic){
+    let p=b,seen=new Set([b.id]);
+    for(let k=0;k<12&&p?.keplerAnchorId!=null;k++){
+      p=byId.get(p.keplerAnchorId);if(!p)break;
+      if(seen.has(p.id)){b.keplerAnchorId=null;break;}seen.add(p.id);
+    }
+  }
+}
+function solveKeplerRelative(rx,ry,rz,vx,vy,vz,mu,dt){
+  const r=Math.sqrt(rx*rx+ry*ry+rz*rz),v2=vx*vx+vy*vy+vz*vz;
+  if(!(r>0&&mu>0&&isFinite(dt)))return null;
+  const energy=.5*v2-mu/r;if(!(energy<0))return null;
+  const a=-mu/(2*energy),n=Math.sqrt(mu/(a*a*a)),period=TAU/n;
+  // Two-body motion is periodic; reducing huge fast-forward steps prevents loss of
+  // precision while remaining exactly equivalent for the dominant central orbit.
+  let dtr=dt%period;
+  const hx=ry*vz-rz*vy,hy=rz*vx-rx*vz,hz=rx*vy-ry*vx,h=Math.sqrt(hx*hx+hy*hy+hz*hz);
+  if(!(h>1e-18))return null;
+  const rv=rx*vx+ry*vy+rz*vz;
+  const ex=((vy*hz-vz*hy)/mu)-rx/r,ey=((vz*hx-vx*hz)/mu)-ry/r,ez=((vx*hy-vy*hx)/mu)-rz/r,e=Math.sqrt(ex*ex+ey*ey+ez*ez);
+  if(e<1e-7){
+    const px=rx/r,py=ry/r,pz=rz/r,hhx=hx/h,hhy=hy/h,hhz=hz/h;
+    let qx=hhy*pz-hhz*py,qy=hhz*px-hhx*pz,qz=hhx*py-hhy*px,qm=Math.sqrt(qx*qx+qy*qy+qz*qz);if(!(qm>0))return null;qx/=qm;qy/=qm;qz/=qm;
+    const th=n*dtr,c=Math.cos(th),s=Math.sin(th),rr=a,sp=Math.sqrt(mu/a);
+    return {rx:rr*(px*c+qx*s),ry:rr*(py*c+qy*s),rz:rr*(pz*c+qz*s),vx:sp*(-px*s+qx*c),vy:sp*(-py*s+qy*c),vz:sp*(-pz*s+qz*c),period};
+  }
+  if(e>=.9999999)return null;
+  const px=ex/e,py=ey/e,pz=ez/e,hhx=hx/h,hhy=hy/h,hhz=hz/h;
+  let qx=hhy*pz-hhz*py,qy=hhz*px-hhx*pz,qz=hhx*py-hhy*px,qm=Math.sqrt(qx*qx+qy*qy+qz*qz);if(!(qm>0))return null;qx/=qm;qy/=qm;qz/=qm;
+  const cosE0=clamp((1-r/a)/e,-1,1),sinE0=clamp(rv/(e*Math.sqrt(mu*a)),-1,1),E0=Math.atan2(sinE0,cosE0),M0=E0-e*Math.sin(E0);
+  let M=(M0+n*dtr)%TAU;if(M>Math.PI)M-=TAU;if(M<-Math.PI)M+=TAU;
+  let E=M+e*Math.sin(M)*(1+e*Math.cos(M));if(e>.8)E=M>=0?Math.PI:-Math.PI;
+  for(let k=0;k<12;k++){const se=Math.sin(E),ce=Math.cos(E),den=1-e*ce,step=(E-e*se-M)/Math.max(den,1e-12);E-=step;if(Math.abs(step)<1e-13)break;}
+  const se=Math.sin(E),ce=Math.cos(E),root=Math.sqrt(Math.max(0,1-e*e)),den=Math.max(1e-12,1-e*ce),xp=a*(ce-e),yp=a*root*se,vxp=-a*n*se/den,vyp=a*n*root*ce/den;
+  return {rx:px*xp+qx*yp,ry:py*xp+qy*yp,rz:pz*xp+qz*yp,vx:px*vxp+qx*vyp,vy:py*vxp+qy*vyp,vz:pz*vxp+qz*vyp,period};
+}
+function anchorDepth(b,byId){
+  let d=0,p=b,seen=new Set([b.id]);while(p?.keplerAnchorId!=null&&d<12){p=byId.get(p.keplerAnchorId);if(!p||seen.has(p.id))break;seen.add(p.id);d++;}return d;
+}
+function keplerSplitDrift(dynamic,dt){
+  const byId=new Map(dynamic.map(b=>[b.id,b])),saved=new Map();
+  for(const b of dynamic){
+    if(!b.alive||b.keplerAnchorId==null)continue;const p=byId.get(b.keplerAnchorId);if(!p)continue;
+    saved.set(b.id,{x:b.x,y:b.y,z:b.z,vx:b.vx,vy:b.vy,vz:b.vz,rx:b.x-p.x,ry:b.y-p.y,rz:b.z-p.z,rvx:b.vx-p.vx,rvy:b.vy-p.vy,rvz:b.vz-p.vz});
+  }
+  // Roots move under the external kick. Anchored children are then rebuilt from an
+  // exact osculating two-body solution around the already-updated parent.
+  for(const b of dynamic){if(!b.alive)continue;if(b.keplerAnchorId==null){b.x+=b.vx*dt;b.y+=b.vy*dt;b.z+=b.vz*dt;}b.age+=Math.abs(dt);}
+  const anchored=dynamic.filter(b=>b.alive&&saved.has(b.id)).sort((a,b)=>anchorDepth(a,byId)-anchorDepth(b,byId));
+  for(const b of anchored){
+    const p=byId.get(b.keplerAnchorId),s=saved.get(b.id);if(!p||!p.alive){b.keplerAnchorId=null;b.x=s.x+s.vx*dt;b.y=s.y+s.vy*dt;b.z=s.z+s.vz*dt;continue;}
+    const rel=solveKeplerRelative(s.rx,s.ry,s.rz,s.rvx,s.rvy,s.rvz,G*Math.max(p.mass+b.mass,1e-15),dt);
+    if(!rel){b.keplerAnchorId=null;b.x=s.x+s.vx*dt;b.y=s.y+s.vy*dt;b.z=s.z+s.vz*dt;continue;}
+    b.x=p.x+rel.rx;b.y=p.y+rel.ry;b.z=p.z+rel.rz;b.vx=p.vx+rel.vx;b.vy=p.vy+rel.vy;b.vz=p.vz+rel.vz;
+  }
+}
+function accelerationsFor(majors,tracers,dynamic){
+  for(const b of dynamic){b.ax=0;b.ay=0;b.az=0;}const eps2=1e-18;
+  for(let i=0;i<majors.length;i++){
+    const a=majors[i];if(!a.alive)continue;
+    for(let j=i+1;j<majors.length;j++){
+      const b=majors[j];if(!b.alive)continue;
+      // The dominant central interaction of an anchored hierarchy member is handled
+      // analytically in keplerSplitDrift, so do not apply it again as a coarse kick.
+      if(a.keplerAnchorId===b.id||b.keplerAnchorId===a.id)continue;
+      const dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z,r2=dx*dx+dy*dy+dz*dz+eps2,invR=1/Math.sqrt(r2),f=G*invR/r2;
+      a.ax+=f*b.mass*dx;a.ay+=f*b.mass*dy;a.az+=f*b.mass*dz;b.ax-=f*a.mass*dx;b.ay-=f*a.mass*dy;b.az-=f*a.mass*dz;
+    }
+  }
+  for(const t of tracers){
+    if(!t.alive)continue;for(const m of majors){if(!m.alive||t.keplerAnchorId===m.id)continue;const dx=m.x-t.x,dy=m.y-t.y,dz=m.z-t.z,r2=dx*dx+dy*dy+dz*dz+eps2,invR=1/Math.sqrt(r2),f=G*m.mass*invR/r2;t.ax+=f*dx;t.ay+=f*dy;t.az+=f*dz;}
+  }
+  // Nested hierarchy correction. If Moon -> Jupiter -> Sun, Jupiter's solar
+  // acceleration is already inside Jupiter's exact Kepler drift. Moon must therefore
+  // receive only the Sun's *differential/tidal* acceleration relative to Jupiter,
+  // not the full heliocentric solar acceleration as an extra kick.
+  const byId=new Map(dynamic.map(b=>[b.id,b]));
+  for(const child of dynamic){
+    if(!child.alive||child.keplerAnchorId==null)continue;const primary=byId.get(child.keplerAnchorId);if(!primary)continue;
+    let ancestor=byId.get(primary.keplerAnchorId),guard=0;
+    while(ancestor&&guard++<12){
+      const dx=ancestor.x-primary.x,dy=ancestor.y-primary.y,dz=ancestor.z-primary.z,r2=dx*dx+dy*dy+dz*dz+eps2,invR=1/Math.sqrt(r2),f=G*ancestor.mass*invR/r2;
+      child.ax-=f*dx;child.ay-=f*dy;child.az-=f*dz;
+      ancestor=byId.get(ancestor.keplerAnchorId);
+    }
+  }
+}
+function distance3(a,b){const dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;return Math.sqrt(dx*dx+dy*dy+dz*dz);}
+function collisionRadius(a,b){
+  if(a.type==='blackHole'&&b.type!=='blackHole')return Math.max(a.radius+b.radius,b.radius*Math.cbrt(Math.max(a.mass/b.mass,1)));
+  if(b.type==='blackHole'&&a.type!=='blackHole')return Math.max(a.radius+b.radius,a.radius*Math.cbrt(Math.max(b.mass/a.mass,1)));
+  return a.radius+b.radius;
+}
+function currentNetAcceleration(b){
+  let ax=0,ay=0,az=0;
+  if(!b||!b.alive)return {x:0,y:0,z:0};
+  if(b.analyticOrbit){
+    const p=bodies.find(o=>o.id===b.analyticOrbit.primaryId&&o.alive);
+    if(!p)return {x:0,y:0,z:0};
+    const dx=p.x-b.x,dy=p.y-b.y,dz=p.z-b.z,r2=dx*dx+dy*dy+dz*dz+1e-18,invR=1/Math.sqrt(r2),f=G*p.mass*invR/r2;
+    return {x:f*dx,y:f*dy,z:f*dz};
+  }
+  for(const m of bodies){
+    if(!m.alive||m.isTracer||m.id===b.id)continue;
+    const dx=m.x-b.x,dy=m.y-b.y,dz=m.z-b.z,r2=dx*dx+dy*dy+dz*dz+1e-18,invR=1/Math.sqrt(r2),f=G*m.mass*invR/r2;
+    ax+=f*dx;ay+=f*dy;az+=f*dz;
+  }
+  return {x:ax,y:ay,z:az};
+}
+function headingDeg(x,y){
+  if(Math.abs(x)+Math.abs(y)<1e-30)return null;
+  let d=Math.atan2(y,x)*180/Math.PI;if(d<0)d+=360;return d;
+}
+function selectedVectorInfo(b){
+  const acc=currentNetAcceleration(b),massKg=b.mass*1.98847e30,accMS2=AU_KM*1000/(YEAR_S*YEAR_S),velKmS=AU_KM/YEAR_S;
+  return {
+    vx:b.vx*velKmS,vy:b.vy*velKmS,vz:b.vz*velKmS,travelHeading:headingDeg(b.vx,b.vy),
+    ax:acc.x*accMS2,ay:acc.y*accMS2,az:acc.z*accMS2,forceHeading:headingDeg(acc.x,acc.y),
+    fx:acc.x*accMS2*massKg,fy:acc.y*accMS2*massKg,fz:acc.z*accMS2*massKg,
+    rawAcc:acc
+  };
+}
+function resolveDynamicCollisions(majors,tracers){
+  if(!impactsEnabled)return false;let changed=false;
+  outer:for(let i=0;i<majors.length;i++)for(let j=i+1;j<majors.length;j++){
+    const a=majors[i],b=majors[j];if(!a.alive||!b.alive||distance3(a,b)>collisionRadius(a,b))continue;
+    changed=true;if(a.type==='blackHole'||b.type==='blackHole'){const bh=a.type==='blackHole'?a:b;swallow(bh,bh===a?b:a);continue outer;}
+    const relV=Math.sqrt((b.vx-a.vx)**2+(b.vy-a.vy)**2+(b.vz-a.vz)**2),escape=Math.sqrt(2*G*(a.mass+b.mass)/Math.max(a.radius+b.radius,1e-12));
+    if(relV>escape*1.45&&a.mass<3&&b.mass<3&&bodies.length<MAX_BODIES-6)fragmentCollision(a,b,relV);else mergeBodies(a,b);continue outer;
+  }
+  for(const t of tracers){if(!t.alive)continue;for(const m of majors){if(!m.alive||distance3(t,m)>collisionRadius(t,m))continue;absorbTracer(m,t);changed=true;break;}}
+  return changed;
+}
+function absorbTracer(major,t){
+  if(!t.alive)return;t.alive=false;major.impactCount++;if(major.type==='blackHole'){major.mass+=t.mass;major.radius=schwarzschildRadiusAU(major.mass);addEffect(t.x,t.y,'swallow','#ffb36b',.8);}else addEffect(t.x,t.y,'impact',t.color,.65);if(selectedId===t.id)selectedId=major.id;if(followedId===t.id)followedId=major.id;
+}
+function swallow(bh,victim){
+  const m=bh.mass+victim.mass;bh.vx=(bh.vx*bh.mass+victim.vx*victim.mass)/m;bh.vy=(bh.vy*bh.mass+victim.vy*victim.mass)/m;bh.vz=(bh.vz*bh.mass+victim.vz*victim.mass)/m;bh.x=(bh.x*bh.mass+victim.x*victim.mass)/m;bh.y=(bh.y*bh.mass+victim.y*victim.mass)/m;bh.z=(bh.z*bh.mass+victim.z*victim.mass)/m;bh.mass=m;bh.radius=schwarzschildRadiusAU(m);bh.impactCount++;bh.mergedFrom++;victim.alive=false;if(selectedId===victim.id)selectedId=bh.id;if(followedId===victim.id)followedId=bh.id;addEffect(victim.x,victim.y,'swallow','#ffb36b',1.2);
+}
+function mergeBodies(a,b){
+  const dominant=a.mass>=b.mass?a:b,other=dominant===a?b:a,m=a.mass+b.mass;dominant.x=(a.x*a.mass+b.x*b.mass)/m;dominant.y=(a.y*a.mass+b.y*b.mass)/m;dominant.z=(a.z*a.mass+b.z*b.mass)/m;dominant.vx=(a.vx*a.mass+b.vx*b.mass)/m;dominant.vy=(a.vy*a.mass+b.vy*b.mass)/m;dominant.vz=(a.vz*a.mass+b.vz*b.mass)/m;if(dominant.type==='blackHole'){dominant.mass=m;dominant.radius=schwarzschildRadiusAU(m);}else{dominant.radius=dominant.type==='sunStar'?Math.pow(m,.8)*RSUN_AU:Math.cbrt(a.radius**3+b.radius**3);dominant.mass=m;}dominant.impactCount++;dominant.mergedFrom+=1+(other.mergedFrom||0);other.alive=false;if(selectedId===other.id)selectedId=dominant.id;if(followedId===other.id)followedId=dominant.id;addEffect(dominant.x,dominant.y,'impact',dominant.color,1);
+}
+function fragmentCollision(a,b,relV){
+  const m=a.mass+b.mass,x=(a.x*a.mass+b.x*b.mass)/m,y=(a.y*a.mass+b.y*b.mass)/m,z=(a.z*a.mass+b.z*b.mass)/m,vx=(a.vx*a.mass+b.vx*b.mass)/m,vy=(a.vy*a.mass+b.vy*b.mass)/m,vz=(a.vz*a.mass+b.vz*b.mass)/m;a.alive=false;b.alive=false;const n=clamp(Math.floor(rand(3,7)),3,7),remaining=m*rand(.78,.95),weights=Array.from({length:n},()=>rand(.3,1.4)),ws=weights.reduce((p,q)=>p+q,0),pieces=[];
+  for(let k=0;k<n;k++){const fm=remaining*weights[k]/ws;if(fm<MIN_MASS)continue;const az=Math.random()*TAU,el=rand(-.5,.5),ce=Math.cos(el),kick=relV*rand(.08,.35),f=makeBody('fragment',x+Math.cos(az)*1e-5,y+Math.sin(az)*1e-5,vx+Math.cos(az)*ce*kick,vy+Math.sin(az)*ce*kick,`Fragment ${nextId}`,z+Math.sin(el)*1e-5,vz+Math.sin(el)*kick);f.mass=fm;f.radius=Math.max(50/AU_KM,Math.cbrt(fm/Math.max(M_EARTH,1e-12))*REARTH_AU*.5);f.color=pick(['#c68d74','#afaca9','#d8ba93','#8f8480']);pieces.push(f);}
+  bodies.push(...pieces);selectedId=pieces[0]?.id??null;if(followedId===a.id||followedId===b.id)followedId=null;addEffect(x,y,'impact','#ffd3a1',1.4);
+}
+function chooseSubsteps(simDt){
+  // Target roughly half a simulated day per global step (previously one day).
+  // This doubles the temporal resolution used by trails and general encounters,
+  // while Kepler-protected close orbits remain analytically stable at high rates.
+  const majorCount=bodies.reduce((n,b)=>n+(!b.isTracer?1:0),0),tracerCount=bodies.reduce((n,b)=>n+(b.isTracer&&!b.analyticOrbit?1:0),0),desired=Math.max(1,Math.ceil(Math.abs(simDt)/(1/730.5)));let cap=majorCount<24?84:majorCount<55?52:28;if(tracerCount>500)cap=Math.min(cap,18);if(tracerCount>1500)cap=Math.min(cap,12);if(frameMsEMA>18)cap=Math.max(4,Math.floor(cap*.72));if(frameMsEMA>24)cap=Math.max(3,Math.floor(cap*.55));return Math.min(desired,cap);
+}
+function physicsStep(dt,sets){
+  const {dynamic,majors,tracers}=sets;if(!dynamic.length)return false;
+  refreshKeplerAnchors(dynamic,majors);
+  accelerationsFor(majors,tracers,dynamic);
+  for(const b of dynamic){if(!b.alive)continue;b.vx+=b.ax*dt*.5;b.vy+=b.ay*dt*.5;b.vz+=b.az*dt*.5;}
+  keplerSplitDrift(dynamic,dt);
+  accelerationsFor(majors,tracers,dynamic);
+  for(const b of dynamic){if(!b.alive)continue;b.vx+=b.ax*dt*.5;b.vy+=b.ay*dt*.5;b.vz+=b.az*dt*.5;}
+  return resolveDynamicCollisions(majors,tracers);
+}
+function trailHistoryValue(){ return Math.pow(10,parseFloat($('#trailHistory').value)); }
+function formatTrailHistory(years){
+  if(years<1/12)return `${formatNum(years*365.25,2)} d`;
+  if(years<1)return `${formatNum(years*12,2)} mo`;
+  return `${formatNum(years,2)} y`;
+}
+function pruneTrail(b,now=simTime,history=trailHistoryValue()){
+  if(!b.trail.length)return;
+  const cutoff=now-history;
+  let remove=0;
+  while(remove<b.trail.length && (b.trail[remove].t??-Infinity)<cutoff)remove++;
+  if(remove)b.trail.splice(0,remove);
+  if(b.trail.length>TRAIL_MAX_POINTS)b.trail.splice(0,b.trail.length-TRAIL_MAX_POINTS);
+}
+function updateTrails(simDt,now=simTime,targets=null){
+  const elapsed=Math.abs(simDt),history=trailHistoryValue();
+  // Sampling density is defined by the chosen simulation-time window, not by playback speed.
+  const interval=Math.max(history/TRAIL_TARGET_POINTS,1/36525);
+  const trailBodies=targets||bodies.filter(b=>b.alive&&b.populationId==null);
+  for(const b of trailBodies){
+    if(!b.alive)continue;
+    b.trailClock+=elapsed;
+    if(b.trailClock>=interval){
+      b.trailClock%=interval;
+      b.trail.push({x:b.x,y:b.y,t:now});
+    }
+    pruneTrail(b,now,history);
+  }
+}
+
+// ---------- Camera ----------
+function pxPerAU(){ return (Math.min(W,H)/20)*cam.zoom; }
+function worldToScreen(x,y){
+  const p=pxPerAU();
+  return {x:W/2+(x-cam.x)*p+pan.x,y:H/2-(y-cam.y)*p+pan.y};
+}
+function screenToWorld(x,y){
+  const p=pxPerAU();
+  return {x:cam.x+(x-W/2-pan.x)/p,y:cam.y-(y-H/2-pan.y)/p};
+}
+function viewSpanAU(){ return W/pxPerAU(); }
+
+function updateCamera(){
+  if(maxZoomOutActive){
+    fitAllAtMaximumZoom();
+    return;
+  }
+  if(followedId!=null){
+    const b=bodies.find(o=>o.id===followedId);
+    if(b){ cam.x += (b.x-cam.x)*.16; cam.y += (b.y-cam.y)*.16; pan.x*=.85;pan.y*=.85; }
+    else followedId=null;
+  } else if(autoCenter && !dragging && Math.abs(pan.x)<1 && Math.abs(pan.y)<1){
+    const bc=barycenter();
+    cam.x += (bc.x-cam.x)*.035; cam.y += (bc.y-cam.y)*.035;
+  }
+}
+function setZoomBySlider(v){
+  // v -8..4 spans deep light-year scales through close planetary views.
+  cam.zoom=Math.pow(10,v);
+}
+function syncZoomSlider(){
+  $('#zoomRange').value=clamp(Math.log10(cam.zoom),-8,4);
+}
+function fitAllAtMaximumZoom(){
+  if(!bodies.length){ cam.zoom=Math.min(cam.zoom,1e-8); return; }
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  for(const b of bodies){
+    minX=Math.min(minX,b.x);maxX=Math.max(maxX,b.x);minY=Math.min(minY,b.y);maxY=Math.max(maxY,b.y);
+  }
+  const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+  const dx=Math.max(maxX-minX,1e-9), dy=Math.max(maxY-minY,1e-9);
+  const base=Math.min(W,H)/20;
+  const fitX=(W-70)/(dx*base), fitY=(H-120)/(dy*base);
+  const fitZoom=Math.max(1e-14,Math.min(fitX,fitY)*.88);
+  cam.zoom=Math.min(1e-8,fitZoom);
+  cam.x=cx;cam.y=cy;pan.x=0;pan.y=0;
+}
+function zoomStep(factor){
+  const next=cam.zoom*factor;
+  if(factor>1){
+    // Zooming in must always release max-fit, even if max-fit had to go beyond the slider's nominal floor.
+    maxZoomOutActive=false;
+    cam.zoom=clamp(next,1e-14,1e4);
+  }else if(next<=1e-8){
+    maxZoomOutActive=true;
+    fitAllAtMaximumZoom();
+  }else{
+    maxZoomOutActive=false;
+    cam.zoom=clamp(next,1e-8,1e4);
+  }
+  syncZoomSlider();updateLabels();
+}
+function bindHoldZoom(el,factor){
+  let delay=null,repeat=null;
+  const stop=()=>{clearTimeout(delay);clearInterval(repeat);delay=repeat=null;};
+  el.addEventListener('pointerdown',e=>{
+    e.preventDefault();stop();zoomStep(factor);
+    try{el.setPointerCapture(e.pointerId);}catch(_){}
+    delay=setTimeout(()=>{repeat=setInterval(()=>zoomStep(factor),65);},260);
+  });
+  el.addEventListener('pointerup',stop);
+  el.addEventListener('pointercancel',stop);
+  el.addEventListener('lostpointercapture',stop);
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+}
+
+// ---------- Visuals ----------
+function drawBackground(t){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#020308';ctx.fillRect(0,0,W,H);
+  // subtle nebular gradients
+  const g=ctx.createRadialGradient(W*.16,H*.25,0,W*.16,H*.25,Math.max(W,H)*.7);
+  g.addColorStop(0,'rgba(42,57,104,.12)');g.addColorStop(.55,'rgba(16,24,48,.035)');g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  for(const s of starField){
+    const tw=.72+.28*Math.sin(t*.0008+s.phase);
+    ctx.globalAlpha=s.a*tw;
+    ctx.fillStyle=s.depth>.9?'#d9e8ff':'#ffffff';
+    ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,TAU);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+function niceGridStep(target){
+  const p=Math.pow(10,Math.floor(Math.log10(target)));
+  const n=target/p;
+  return (n<2?1:n<5?2:5)*p;
+}
+function drawGrid(){
+  if(!gridEnabled) return;
+  const p=pxPerAU();
+  const step=niceGridStep(90/p);
+  const left=screenToWorld(0,0).x,right=screenToWorld(W,0).x;
+  const bottom=screenToWorld(0,H).y,top=screenToWorld(0,0).y;
+  ctx.lineWidth=1;ctx.font='10px system-ui';ctx.textBaseline='top';
+  const x0=Math.floor(Math.min(left,right)/step)*step;
+  const x1=Math.max(left,right);
+  const y0=Math.floor(Math.min(bottom,top)/step)*step;
+  const y1=Math.max(bottom,top);
+  ctx.strokeStyle='rgba(160,185,225,.07)';ctx.fillStyle='rgba(160,185,225,.22)';
+  for(let x=x0;x<=x1;x+=step){
+    const s=worldToScreen(x,0).x;ctx.beginPath();ctx.moveTo(s,0);ctx.lineTo(s,H);ctx.stroke();
+    if(s>4&&s<W-60) ctx.fillText(`${formatNum(x,2)} AU`,s+3,5);
+  }
+  for(let y=y0;y<=y1;y+=step){
+    const s=worldToScreen(0,y).y;ctx.beginPath();ctx.moveTo(0,s);ctx.lineTo(W,s);ctx.stroke();
+  }
+}
+function isFocusedBody(b){return !!b&&(b.id===selectedId||b.id===followedId);}
+function drawTrails(){
+  const history=trailHistoryValue();
+  for(const b of bodies){
+    if(!trailsEnabled&&!isFocusedBody(b))continue;
+    if(b.trail.length<1) continue;
+    ctx.lineWidth=1;
+    let prev=null;
+    for(const q of b.trail){
+      const s=worldToScreen(q.x,q.y);
+      if(prev){
+        const age=clamp((simTime-(q.t??simTime))/history,0,1);
+        const alpha=.34*Math.pow(1-age,1.25);
+        if(alpha>.012){
+          ctx.strokeStyle=rgba(b.color,alpha);
+          ctx.beginPath();ctx.moveTo(prev.x,prev.y);ctx.lineTo(s.x,s.y);ctx.stroke();
+        }
+      }
+      prev=s;
+    }
+    if(prev){
+      const s=worldToScreen(b.x,b.y);
+      ctx.strokeStyle=rgba(b.color,.34);
+      ctx.beginPath();ctx.moveTo(prev.x,prev.y);ctx.lineTo(s.x,s.y);ctx.stroke();
+    }
+  }
+}
+function computeDisplayPositions(){
+  displayPositions=new Map();
+  const important=bodies.filter(b=>b.populationId==null || b.id===selectedId || b.id===followedId);
+  const n=important.length;if(!n)return;
+  const screen=important.map(b=>{const s=worldToScreen(b.x,b.y);return {b,x:s.x,y:s.y};});
+  const parent=Array.from({length:n},(_,i)=>i);
+  const find=i=>{while(parent[i]!==i){parent[i]=parent[parent[i]];i=parent[i];}return i;};
+  const join=(a,b)=>{a=find(a);b=find(b);if(a!==b)parent[b]=a;};
+  const mergeDistance=12;
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const dx=screen[i].x-screen[j].x,dy=screen[i].y-screen[j].y;if(dx*dx+dy*dy<mergeDistance*mergeDistance)join(i,j);}
+  const groups=new Map();for(let i=0;i<n;i++){const r=find(i);if(!groups.has(r))groups.set(r,[]);groups.get(r).push(i);}
+  for(const indices of groups.values()){
+    if(indices.length===1){const q=screen[indices[0]];displayPositions.set(q.b.id,{x:q.x,y:q.y,actualX:q.x,actualY:q.y,offset:false});continue;}
+    let anchorIndex=indices[0];for(const i of indices)if(screen[i].b.mass>screen[anchorIndex].b.mass)anchorIndex=i;
+    const anchor=screen[anchorIndex];displayPositions.set(anchor.b.id,{x:anchor.x,y:anchor.y,actualX:anchor.x,actualY:anchor.y,offset:false});
+    let slot=0;
+    for(const i of indices){
+      if(i===anchorIndex)continue;const q=screen[i];let dx=q.x-anchor.x,dy=q.y-anchor.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<.001){
+        // At extreme zoom-out, screen-space subtraction can collapse a real moon orbit
+        // below numerical/pixel resolution. Use the true world-space relative direction
+        // instead of pinning the marker to a fixed ID-based slot.
+        dx=q.b.x-anchor.b.x;dy=-(q.b.y-anchor.b.y);d=Math.sqrt(dx*dx+dy*dy);
+        if(d<1e-24){const a=(q.b.id*.754877666)%TAU;dx=Math.cos(a);dy=Math.sin(a);d=1;}
+      }
+      dx/=d;dy/=d;const ring=1+Math.floor(slot/7),spread=Math.max(12.5,visualRadius(anchor.b)+visualRadius(q.b)+3)+ring*5.5;
+      // Preserve the true projected orbital direction: sub-pixel moons/comets visibly revolve instead of being pinned to a fixed slot.
+      displayPositions.set(q.b.id,{x:anchor.x+dx*spread,y:anchor.y+dy*spread,actualX:q.x,actualY:q.y,offset:true});slot++;
+    }
+  }
+}
+function bodyScreen(b){return displayPositions.get(b.id)||worldToScreen(b.x,b.y);}
+function drawVisibilityTethers(){
+  ctx.lineWidth=1;for(const b of bodies){const s=displayPositions.get(b.id);if(!s||!s.offset)continue;const dx=s.x-s.actualX,dy=s.y-s.actualY;if(dx*dx+dy*dy<16)continue;ctx.strokeStyle=rgba(b.type==='blackHole'?'#ffb36b':b.color,.18);ctx.beginPath();ctx.moveTo(s.actualX,s.actualY);ctx.lineTo(s.x,s.y);ctx.stroke();}
+}
+function physicalPx(b){ return b.radius*pxPerAU(); }
+function visualRadius(b){
+  let min=3.2,max=80;
+  if(b.type==='blackHole') min=7;
+  if(b.type==='neutronStar') min=4.5;
+  if(b.type==='sunStar') min=6;
+  if(b.type==='fragment') min=2;
+  if(b.type==='comet'||b.type==='asteroid'||b.type==='oort') min=2.6;
+  return clamp(physicalPx(b),min,max);
+}
+function drawGlow(x,y,r,color,alpha=.55){
+  const gr=ctx.createRadialGradient(x,y,0,x,y,r*3.8);
+  gr.addColorStop(0,rgba(color,alpha));gr.addColorStop(.22,rgba(color,alpha*.5));gr.addColorStop(1,rgba(color,0));
+  ctx.fillStyle=gr;ctx.beginPath();ctx.arc(x,y,r*3.8,0,TAU);ctx.fill();
+}
+function drawStar(b,s,r,t){
+  drawGlow(s.x,s.y,r,b.color,.72);
+  const grad=ctx.createRadialGradient(s.x-r*.28,s.y-r*.35,0,s.x,s.y,r);
+  grad.addColorStop(0,'#ffffff');grad.addColorStop(.22,b.color);grad.addColorStop(1,rgba(b.color,.65));
+  ctx.fillStyle=grad;ctx.beginPath();ctx.arc(s.x,s.y,r,0,TAU);ctx.fill();
+}
+function drawNeutron(b,s,r,t){
+  drawGlow(s.x,s.y,r*1.25,b.color,.72);
+  ctx.fillStyle='#eaffff';ctx.beginPath();ctx.arc(s.x,s.y,r,0,TAU);ctx.fill();
+  ctx.save();
+  ctx.translate(s.x,s.y);ctx.rotate(b.spin+t*.002);
+  const len=r*7;
+  const g=ctx.createLinearGradient(-len,0,len,0);
+  g.addColorStop(0,'rgba(160,220,255,0)');g.addColorStop(.5,'rgba(205,245,255,.55)');g.addColorStop(1,'rgba(160,220,255,0)');
+  ctx.fillStyle=g;ctx.fillRect(-len,-Math.max(1,r*.18),len*2,Math.max(2,r*.36));ctx.restore();
+}
+function drawBlackHole(b,s,r,t){
+  // stylized lensing/accretion while keeping the event horizon dark.
+  const diskR=r*3.3;
+  ctx.save();ctx.translate(s.x,s.y);ctx.rotate(.2*Math.sin(b.phase)+.12);
+  ctx.scale(1,.34);
+  const dg=ctx.createRadialGradient(0,0,r*.7,0,0,diskR);
+  dg.addColorStop(0,'rgba(255,241,198,0)');
+  dg.addColorStop(.35,'rgba(255,211,126,.92)');
+  dg.addColorStop(.56,'rgba(255,122,63,.72)');
+  dg.addColorStop(1,'rgba(110,63,255,0)');
+  ctx.fillStyle=dg;ctx.beginPath();ctx.arc(0,0,diskR,0,TAU);ctx.fill();
+  ctx.restore();
+
+  const ring=ctx.createRadialGradient(s.x,s.y,r*.82,s.x,s.y,r*1.65);
+  ring.addColorStop(0,'rgba(0,0,0,1)');
+  ring.addColorStop(.40,'rgba(0,0,0,1)');
+  ring.addColorStop(.53,'rgba(255,222,149,.95)');
+  ring.addColorStop(.66,'rgba(144,184,255,.18)');
+  ring.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=ring;ctx.beginPath();ctx.arc(s.x,s.y,r*1.7,0,TAU);ctx.fill();
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(s.x,s.y,r*.9,0,TAU);ctx.fill();
+
+  // orbiting bright knot
+  const a=t*.0018+b.phase;
+  ctx.fillStyle='rgba(255,240,200,.8)';
+  ctx.beginPath();ctx.arc(s.x+Math.cos(a)*diskR*.78,s.y+Math.sin(a)*diskR*.25,1.1,0,TAU);ctx.fill();
+}
+function drawJupiter(b,s,r){
+  drawGlow(s.x,s.y,r,b.color,.15);
+  ctx.save();ctx.beginPath();ctx.arc(s.x,s.y,r,0,TAU);ctx.clip();
+  ctx.fillStyle=b.color;ctx.fillRect(s.x-r,s.y-r,r*2,r*2);
+  const bands=['rgba(255,238,210,.26)','rgba(96,55,38,.23)','rgba(255,214,165,.22)','rgba(111,67,45,.18)'];
+  for(let k=-4;k<=4;k++){
+    const yy=s.y+k*r*.24+Math.sin(b.phase+k)*r*.03;
+    ctx.fillStyle=bands[(k+8)%bands.length];
+    ctx.fillRect(s.x-r,yy-r*.085,r*2,r*.16);
+  }
+  if(r>8){
+    ctx.fillStyle='rgba(160,69,52,.55)';
+    ctx.beginPath();ctx.ellipse(s.x+r*.34,s.y+r*.18,r*.20,r*.10,-.15,0,TAU);ctx.fill();
+  }
+  const shade=ctx.createRadialGradient(s.x-r*.35,s.y-r*.4,0,s.x,s.y,r*1.2);
+  shade.addColorStop(.2,'rgba(255,255,255,.16)');shade.addColorStop(1,'rgba(0,0,0,.42)');
+  ctx.fillStyle=shade;ctx.fillRect(s.x-r,s.y-r,r*2,r*2);ctx.restore();
+}
+function drawEarth(b,s,r){
+  drawGlow(s.x,s.y,r,'#5caaff',.13);
+  const g=ctx.createRadialGradient(s.x-r*.35,s.y-r*.4,0,s.x,s.y,r*1.1);
+  g.addColorStop(0,'#8ed5ff');g.addColorStop(.45,b.color);g.addColorStop(1,'#123a69');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(s.x,s.y,r,0,TAU);ctx.fill();
+  if(r>6){
+    ctx.save();ctx.beginPath();ctx.arc(s.x,s.y,r*.96,0,TAU);ctx.clip();
+    ctx.fillStyle='rgba(92,145,74,.72)';
+    for(let k=0;k<5;k++){
+      const a=b.phase+k*1.7;
+      ctx.beginPath();ctx.ellipse(s.x+Math.cos(a)*r*.45,s.y+Math.sin(a*.8)*r*.32,r*.24,r*.11,a,0,TAU);ctx.fill();
+    }
+    ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=Math.max(.6,r*.035);
+    ctx.beginPath();ctx.arc(s.x,s.y,r*.72,-.4,2.4);ctx.stroke();ctx.restore();
+  }
+}
+function drawMars(b,s,r){
+  const g=ctx.createRadialGradient(s.x-r*.35,s.y-r*.38,0,s.x,s.y,r*1.1);
+  g.addColorStop(0,'#efa47d');g.addColorStop(.46,b.color);g.addColorStop(1,'#55271f');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(s.x,s.y,r,0,TAU);ctx.fill();
+  if(r>6){
+    ctx.save();ctx.beginPath();ctx.arc(s.x,s.y,r*.97,0,TAU);ctx.clip();
+    ctx.fillStyle='rgba(83,45,36,.30)';
+    for(let k=0;k<5;k++){const a=b.phase+k*1.41;ctx.beginPath();ctx.ellipse(s.x+Math.cos(a)*r*.48,s.y+Math.sin(a*1.27)*r*.42,r*.18,r*.07,a*.4,0,TAU);ctx.fill();}
+    ctx.fillStyle='rgba(240,220,202,.68)';ctx.fillRect(s.x-r*.65,s.y-r*.94,r*1.3,r*.10);ctx.restore();
+  }
+}
+function drawSimplePlanet(b,s,r,highlight,mid,dark){
+  const g=ctx.createRadialGradient(s.x-r*.34,s.y-r*.38,0,s.x,s.y,r*1.1);
+  g.addColorStop(0,highlight);g.addColorStop(.46,mid||b.color);g.addColorStop(1,dark);
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(s.x,s.y,r,0,TAU);ctx.fill();
+}
+function drawMercury(b,s,r){
+  drawSimplePlanet(b,s,r,'#d7d1c8',b.color,'#4b4845');
+  if(r>7){ctx.fillStyle='rgba(54,50,48,.20)';for(let k=0;k<5;k++){const a=b.phase+k*1.31;ctx.beginPath();ctx.arc(s.x+Math.cos(a)*r*.46,s.y+Math.sin(a*1.4)*r*.42,r*(.06+.025*(k%2)),0,TAU);ctx.fill();}}
+}
+function drawVenus(b,s,r){
+  drawSimplePlanet(b,s,r,'#fff0b8',b.color,'#9c6635');
+  if(r>6){ctx.save();ctx.beginPath();ctx.arc(s.x,s.y,r*.96,0,TAU);ctx.clip();ctx.strokeStyle='rgba(255,244,203,.34)';ctx.lineWidth=Math.max(1,r*.08);for(let k=-2;k<=2;k++){ctx.beginPath();ctx.moveTo(s.x-r,s.y+k*r*.28);ctx.bezierCurveTo(s.x-r*.25,s.y+(k*.28+.18)*r,s.x+r*.35,s.y+(k*.28-.15)*r,s.x+r,s.y+k*r*.28);ctx.stroke();}ctx.restore();}
+}
+function drawSaturn(b,s,r){
+  ctx.save();ctx.translate(s.x,s.y);ctx.rotate(-.18);ctx.strokeStyle='rgba(221,202,162,.55)';ctx.lineWidth=Math.max(1,r*.16);ctx.beginPath();ctx.ellipse(0,0,r*1.7,r*.48,0,Math.PI,TAU);ctx.stroke();ctx.restore();
+  drawSimplePlanet(b,s,r,'#f7e3b1',b.color,'#8e6f48');
+  ctx.save();ctx.translate(s.x,s.y);ctx.rotate(-.18);ctx.strokeStyle='rgba(235,216,176,.72)';ctx.lineWidth=Math.max(1,r*.14);ctx.beginPath();ctx.ellipse(0,0,r*1.7,r*.48,0,0,Math.PI);ctx.stroke();ctx.restore();
+}
+function drawIceGiant(b,s,r,highlight,dark){
+  drawGlow(s.x,s.y,r,b.color,.08);drawSimplePlanet(b,s,r,highlight,b.color,dark);
+}
+function drawMoon(b,s,r){
+  const g=ctx.createRadialGradient(s.x-r*.35,s.y-r*.35,0,s.x,s.y,r);
+  g.addColorStop(0,'#e4e5e8');g.addColorStop(.4,b.color);g.addColorStop(1,'#5d626a');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(s.x,s.y,r,0,TAU);ctx.fill();
+  if(r>7){
+    ctx.fillStyle='rgba(40,45,54,.22)';
+    for(let k=0;k<4;k++){
+      const a=b.phase+k*1.5,rr=r*(.08+.04*(k%2));
+      ctx.beginPath();ctx.arc(s.x+Math.cos(a)*r*.48,s.y+Math.sin(a*1.3)*r*.45,rr,0,TAU);ctx.fill();
+    }
+  }
+}
+function drawDwarf(b,s,r){
+  drawGlow(s.x,s.y,r,b.color,.12);
+  const g=ctx.createRadialGradient(s.x-r*.3,s.y-r*.35,0,s.x,s.y,r);
+  g.addColorStop(0,'#9d9199');g.addColorStop(.4,b.color);g.addColorStop(1,'#17151a');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(s.x,s.y,r,0,TAU);ctx.fill();
+}
+function dominantLightSource(b){
+  let best=null,bestScore=0;
+  for(const s of bodies){if(s===b||!s.alive||s.luminosity<=1e-5)continue;const dx=b.x-s.x,dy=b.y-s.y,dz=b.z-s.z,d2=dx*dx+dy*dy+dz*dz+1e-9,score=s.luminosity/d2;if(score>bestScore){bestScore=score;best=s;}}
+  return best;
+}
+function centralAcceleration2D(x,y,mu){
+  const r2=x*x+y*y+1e-12,invR=1/Math.sqrt(r2),f=-mu*invR/r2;
+  return {x:f*x,y:f*y};
+}
+function propagateCentral2D(state,totalDt,mu,steps=5){
+  let x=state.x,y=state.y,vx=state.vx,vy=state.vy;const dt=totalDt/steps;
+  for(let i=0;i<steps;i++){
+    let a=centralAcceleration2D(x,y,mu);vx+=a.x*dt*.5;vy+=a.y*dt*.5;x+=vx*dt;y+=vy*dt;a=centralAcceleration2D(x,y,mu);vx+=a.x*dt*.5;vy+=a.y*dt*.5;
+  }
+  return {x,y,vx,vy};
+}
+function cometDustScreenPoints(b,star,s,activation){
+  const rx=b.x-star.x,ry=b.y-star.y,rvx=b.vx-star.vx,rvy=b.vy-star.vy,mu=G*Math.max(star.mass,1e-8);
+  const maxAge=(.018+.055*activation)*clamp(Math.sqrt(Math.max(Math.sqrt(rx*rx+ry*ry),.2)),.7,1.35); // ~1–4 weeks of dust history
+  const count=9,pts=[{x:s.x,y:s.y}],beta=.58;
+  for(let i=1;i<count;i++){
+    const age=maxAge*i/(count-1);
+    // Reconstruct where the nucleus approximately was when this dust was released, then propagate
+    // the grain to the present under weaker effective solar gravity (radiation pressure = beta).
+    const past=propagateCentral2D({x:rx,y:ry,vx:rvx,vy:rvy},-age,mu,5);
+    const pr=Math.sqrt(past.x*past.x+past.y*past.y)||1,eject=.015; // AU/yr; modest outward dust ejection
+    const dust0={x:past.x,y:past.y,vx:past.vx+past.x/pr*eject,vy:past.vy+past.y/pr*eject};
+    const dustNow=propagateCentral2D(dust0,age,mu*(1-beta),5);
+    pts.push({x:s.x+(dustNow.x-rx)*pxPerAU(),y:s.y-(dustNow.y-ry)*pxPerAU()});
+  }
+  // Tail geometry is physically shaped but visibility-scaled, just like minimum-size bodies.
+  // This prevents a close comet from painting a multi-planet-length stripe across the phone screen.
+  let maxPx=0;for(const p of pts)maxPx=Math.max(maxPx,Math.hypot(p.x-s.x,p.y-s.y));
+  const target=14+31*activation,scale=maxPx>1e-6?clamp(target/maxPx,.35,18):1;
+  for(let i=1;i<pts.length;i++){pts[i].x=s.x+(pts[i].x-s.x)*scale;pts[i].y=s.y+(pts[i].y-s.y)*scale;}
+  return pts;
+}
+function drawComet(b,s,r){
+  const star=dominantLightSource(b);
+  if(star){
+    const dx=b.x-star.x,dy=b.y-star.y,dz=b.z-star.z,d=Math.sqrt(dx*dx+dy*dy+dz*dz)||1;
+    const projected=Math.sqrt(dx*dx+dy*dy)||1,antiX=dx/projected,antiY=-dy/projected;
+    const activityRadius=5.2*Math.sqrt(Math.max(star.luminosity,.05));
+    const activation=clamp((activityRadius-d)/Math.max(activityRadius*.82,.5),0,1);
+    if(activation>0){
+      const pts=cometDustScreenPoints(b,star,s,activation),dustWidth=clamp(1.5+r*.65,2,4.8),last=pts[pts.length-1];
+      // Dust tail: older grains follow a different solar orbit after radiation pressure changes their
+      // effective gravity, producing the lagged curved shape rather than an instantly rotating line.
+      const dustGrad=ctx.createLinearGradient(s.x,s.y,last.x,last.y);
+      dustGrad.addColorStop(0,`rgba(244,239,220,${.48*activation})`);dustGrad.addColorStop(.5,`rgba(225,216,194,${.24*activation})`);dustGrad.addColorStop(1,'rgba(210,200,180,0)');
+      ctx.save();ctx.strokeStyle=dustGrad;ctx.lineWidth=dustWidth;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+      for(let i=1;i<pts.length-1;i++){const mx=(pts[i].x+pts[i+1].x)/2,my=(pts[i].y+pts[i+1].y)/2;ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my);}ctx.lineTo(last.x,last.y);ctx.stroke();ctx.restore();
+
+      // Ion tail: solar wind couples much more strongly to ions, so it remains straighter and
+      // points almost directly anti-solar. Keep it shorter than the old renderer's giant beam.
+      const ionLen=clamp(9+24*activation*clamp(1/Math.sqrt(Math.max(d,.35)),.78,1.12),9,34);
+      const ionGrad=ctx.createLinearGradient(s.x,s.y,s.x+antiX*ionLen,s.y+antiY*ionLen);
+      ionGrad.addColorStop(0,`rgba(190,232,255,${.52*activation})`);ionGrad.addColorStop(.55,`rgba(117,188,255,${.24*activation})`);ionGrad.addColorStop(1,'rgba(96,164,255,0)');
+      ctx.strokeStyle=ionGrad;ctx.lineWidth=Math.max(1,Math.min(2,r*.3));ctx.lineCap='round';ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(s.x+antiX*ionLen,s.y+antiY*ionLen);ctx.stroke();
+    }
+  }
+  drawGlow(s.x,s.y,r,b.color,.18);ctx.fillStyle='#e7f7ff';ctx.beginPath();ctx.arc(s.x,s.y,r*.72,0,TAU);ctx.fill();
+}
+function drawAsteroid(b,s,r){
+  ctx.fillStyle=b.color;ctx.beginPath();for(let k=0;k<8;k++){const a=k/8*TAU,rr=r*(.72+.28*Math.sin(b.phase+k*2.37));const x=s.x+Math.cos(a)*rr,y=s.y+Math.sin(a)*rr;if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.closePath();ctx.fill();
+}
+function drawFragment(b,s,r){
+  ctx.fillStyle=b.color;ctx.beginPath();
+  for(let k=0;k<7;k++){
+    const a=k/7*TAU, rr=r*(.75+.25*Math.sin(b.phase+k*2.1));
+    const x=s.x+Math.cos(a)*rr,y=s.y+Math.sin(a)*rr;
+    if(k===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  }
+  ctx.closePath();ctx.fill();
+}
+function drawBody(b,t){
+  const s=bodyScreen(b);
+  if(s.x<-120||s.x>W+120||s.y<-120||s.y>H+120) return;
+  const r=visualRadius(b);
+  if(b.type==='sunStar') drawStar(b,s,r,t);
+  else if(b.type==='neutronStar') drawNeutron(b,s,r,t);
+  else if(b.type==='blackHole') drawBlackHole(b,s,r,t);
+  else if(b.type==='jupiter') drawJupiter(b,s,r);
+  else if(b.type==='earth') drawEarth(b,s,r);
+  else if(b.type==='mercury') drawMercury(b,s,r);
+  else if(b.type==='venus') drawVenus(b,s,r);
+  else if(b.type==='mars') drawMars(b,s,r);
+  else if(b.type==='saturn') drawSaturn(b,s,r);
+  else if(b.type==='uranus') drawIceGiant(b,s,r,'#d6ffff','#367f8c');
+  else if(b.type==='neptune') drawIceGiant(b,s,r,'#8fc2ff','#163a86');
+  else if(b.type==='moon') drawMoon(b,s,r);
+  else if(b.type==='blackDwarf') drawDwarf(b,s,r);
+  else if(b.type==='comet'||b.type==='oort') drawComet(b,s,r);
+  else if(b.type==='asteroid') drawAsteroid(b,s,r);
+  else drawFragment(b,s,r);
+
+  if(selectedId===b.id){
+    ctx.strokeStyle='rgba(120,184,255,.92)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.arc(s.x,s.y,r+7,0,TAU);ctx.stroke();ctx.setLineDash([]);
+  }
+  const showThisLabel=labelsEnabled?((b.populationId==null&&(r>3||selectedId===b.id))||b.isRenamed):isFocusedBody(b);
+  if(showThisLabel){
+    ctx.font='11px system-ui';ctx.textBaseline='middle';
+    const text=b.name;
+    const tw=ctx.measureText(text).width;
+    ctx.fillStyle='rgba(3,6,12,.68)';ctx.fillRect(s.x+r+5,s.y-8,tw+8,16);
+    ctx.fillStyle='rgba(235,244,255,.82)';ctx.fillText(text,s.x+r+9,s.y);
+  }
+}
+function drawLocatorMarkers(){
+  // Guarantee a few-pixel visible locator for bodies whose physical disk is sub-pixel or whose markers were separated.
+  ctx.save();
+  for(const b of bodies){
+    if(b.populationId!=null && b.id!==selectedId) continue;
+    const s=bodyScreen(b);
+    if(s.x<-12||s.x>W+12||s.y<-12||s.y>H+12) continue;
+    if(physicalPx(b)>=2.5 && !s.offset) continue;
+    const c=b.type==='blackHole'?'#ffb36b':b.color;
+    ctx.fillStyle='rgba(0,0,0,.82)';ctx.beginPath();ctx.arc(s.x,s.y,4.3,0,TAU);ctx.fill();
+    ctx.fillStyle=c;ctx.beginPath();ctx.arc(s.x,s.y,2.5,0,TAU);ctx.fill();
+    if(selectedId===b.id){ctx.strokeStyle='rgba(210,234,255,.95)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(s.x,s.y,5.6,0,TAU);ctx.stroke();}
+  }
+  ctx.restore();
+}
+function drawPopulationTracers(){
+  ctx.save();let lastKind=null;
+  for(const b of bodies){
+    if(b.populationId==null||b.id===selectedId)continue;const s=worldToScreen(b.x,b.y);if(s.x<-4||s.x>W+4||s.y<-4||s.y>H+4)continue;
+    if(b.populationKind!==lastKind){lastKind=b.populationKind;ctx.fillStyle=lastKind==='oort'?'rgba(196,229,255,.78)':'rgba(184,163,142,.82)';}
+    const size=b.populationKind==='oort'?2.2:2.4;ctx.fillRect(s.x-size/2,s.y-size/2,size,size);
+  }
+  ctx.restore();
+}
+function drawVectorNeedle(x,y,dx,dy,color,offset,size){
+  const mag=Math.sqrt(dx*dx+dy*dy);if(mag<1e-30)return;dx/=mag;dy/=mag;
+  const px=-dy,py=dx;
+  const baseX=x+dx*offset,baseY=y+dy*offset;
+  const neckX=baseX+dx*(size*.42),neckY=baseY+dy*(size*.42);
+  const tipX=baseX+dx*size,tipY=baseY+dy*size;
+  const half=size*.24;
+  ctx.save();
+  ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=1.45;ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.beginPath();ctx.moveTo(baseX,baseY);ctx.lineTo(neckX,neckY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(tipX,tipY);ctx.lineTo(neckX+px*half,neckY+py*half);ctx.lineTo(neckX-px*half,neckY-py*half);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+function drawSelectedVectors(){
+  const b=bodies.find(o=>o.id===selectedId&&o.alive);if(!b)return;
+  const s=bodyScreen(b),r=visualRadius(b),v=selectedVectorInfo(b);
+  // Tiny integrated pointers only: blue = velocity, yellow = net gravitational force.
+  drawVectorNeedle(s.x,s.y,b.vx,-b.vy,'rgba(126,215,255,.98)',r+4,7);
+  drawVectorNeedle(s.x,s.y,v.rawAcc.x,-v.rawAcc.y,'rgba(255,209,102,.98)',r+11,6.5);
+}
+function addEffect(x,y,type,color,duration=1){
+  effects.push({x,y,type,color,start:performance.now(),duration});
+  if(effects.length>50) effects.shift();
+}
+function drawEffects(t){
+  effects=effects.filter(e=>(t-e.start)/1000<e.duration);
+  for(const e of effects){
+    const p=(t-e.start)/1000/e.duration, s=worldToScreen(e.x,e.y);
+    ctx.save();
+    ctx.globalAlpha=(1-p);
+    if(e.type==='impact'||e.type==='swallow'){
+      const r=8+p*70;
+      const g=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,r);
+      g.addColorStop(0,rgba(e.color,.85*(1-p)));g.addColorStop(.28,rgba(e.color,.38*(1-p)));g.addColorStop(1,rgba(e.color,0));
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(s.x,s.y,r,0,TAU);ctx.fill();
+      ctx.strokeStyle=rgba(e.color,.62*(1-p));ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(s.x,s.y,r*.7,0,TAU);ctx.stroke();
+    } else {
+      ctx.strokeStyle=rgba(e.color,.7*(1-p));ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(s.x,s.y,5+p*16,0,TAU);ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+function render(t){
+  drawBackground(t);drawGrid();drawTrails();drawPopulationTracers();computeDisplayPositions();drawVisibilityTethers();
+  const drawOrder=bodies.filter(b=>b.populationId==null).slice().sort((a,b)=>visualRadius(b)-visualRadius(a));
+  for(const b of drawOrder)if(b.id!==selectedId)drawBody(b,t);
+  const sel=bodies.find(b=>b.id===selectedId);if(sel)drawBody(sel,t);
+  drawSelectedVectors();drawEffects(t);drawLocatorMarkers();
+}
+
+// ---------- UI ----------
+function sliderTimeScaleValue(){return Math.pow(10,parseFloat($('#timeScale').value));}
+function manualRateActive(){return Math.abs(Math.log2(Math.max(manualRateMultiplier,1e-300)))>1e-10;}
+function timeScaleValue(){return timedRateBoost?timedRateBoost.boostRate:sliderTimeScaleValue()*manualRateMultiplier;}
+function setSliderRateDisplay(rate){
+  if(!isFinite(rate)||rate<=0)return false;
+  const slider=$('#timeScale'),log=Math.log10(rate);
+  if(log<parseFloat(slider.min))slider.min=String(Math.floor(log)-.25);
+  if(log>parseFloat(slider.max))slider.max=String(Math.ceil(log)+.25);
+  slider.value=String(log);
+  return true;
+}
+function setSimulationRate(rate){
+  if(!setSliderRateDisplay(rate))return false;
+  manualRateMultiplier=1;
+  updateLabels();updateTimeToolState();
+  return true;
+}
+function updateTimeToolState(){
+  const slow=$('#slowTimeBtn'),center=$('#timeCenterBtn'),fast=$('#fastTimeBtn');
+  if(!slow||!center||!fast)return;
+  const locked=!!timedRateBoost,active=manualRateActive();
+  slow.disabled=center.disabled=fast.disabled=locked;
+  slow.classList.toggle('active',!locked&&manualRateMultiplier<1-1e-12);
+  fast.classList.toggle('active',!locked&&manualRateMultiplier>1+1e-12);
+  center.classList.toggle('active',!locked&&active);
+  if(locked){
+    center.textContent='⏱';center.title='Timed 10s boost is active';center.setAttribute('aria-label','Timed prediction boost active');
+  }else if(active){
+    center.textContent='↺';center.title='Reset playback rate to the settings slider rate';center.setAttribute('aria-label','Reset playback rate');
+  }else if(paused){
+    center.textContent='▶';center.title='Play simulation';center.setAttribute('aria-label','Play simulation');
+  }else{
+    center.textContent='⏸';center.title='Pause simulation';center.setAttribute('aria-label','Pause simulation');
+  }
+  const effective=timeScaleValue(),base=sliderTimeScaleValue();
+  slow.title=locked?'Disabled during timed 10s boost':`Halve live playback rate (base ${formatNum(base,3)} y/s; live ${formatNum(effective,3)} y/s)`;
+  fast.title=locked?'Disabled during timed 10s boost':`Double live playback rate (base ${formatNum(base,3)} y/s; live ${formatNum(effective,3)} y/s)`;
+}
+function prepareRateChange(){
+  // A UI click happens between animation frames. Do not apply the newly selected
+  // rate retroactively to the portion of the frame that elapsed before the click.
+  // That old behavior could turn several rapid 2× taps into one enormous fake
+  // physics step and inject orbital energy.
+  lastNow=performance.now();
+  const sets=buildDynamicSets();if(sets.dynamic.length)refreshKeplerAnchors(sets.dynamic,sets.majors);
+}
+function adjustManualRate(factor){
+  if(timedRateBoost)return;
+  prepareRateChange();
+  const next=manualRateMultiplier*factor;
+  manualRateMultiplier=clamp(next,1e-12,1e12);
+  updateLabels();updateTimeToolState();refreshPredictionSpeedButtons();
+  showToast(`Live time ${formatNum(timeScaleValue(),4)} y/s · base ${formatNum(sliderTimeScaleValue(),4)} y/s`);
+}
+function handleTimeCenter(){
+  if(timedRateBoost)return;
+  if(manualRateActive()){
+    prepareRateChange();
+    manualRateMultiplier=1;
+    updateLabels();updateTimeToolState();refreshPredictionSpeedButtons();
+    showToast(`Playback reset to base ${formatNum(sliderTimeScaleValue(),4)} y/s`);
+    return;
+  }
+  togglePause();
+}
+function restoreTimedRateBoost(showMessage=true){
+  const boost=timedRateBoost;if(!boost)return;
+  timedRateBoost=null;
+  updateLabels();updateTimeToolState();
+  refreshPredictionSpeedButtons();
+  if(showMessage)showToast(`Boost complete · restored ${formatNum(timeScaleValue(),4)} y/s`);
+}
+function cancelTimedRateBoost(message='Timed boost cancelled'){
+  if(!timedRateBoost)return;
+  restoreTimedRateBoost(false);
+  if(message)showToast(message);
+}
+function predictionBoostEligibility(targetSimTime){
+  const remaining=targetSimTime-simTime,rate=timeScaleValue();
+  if(!isFinite(remaining)||remaining<=0||!isFinite(rate)||rate<=0)return {ok:false,reason:'passed',remaining,rate,wait:0};
+  const wait=remaining/rate;
+  // <=10 s: explicitly too close per request.
+  if(wait<=10+1e-9)return {ok:false,reason:'under10',remaining,rate,wait};
+  // A 5 s phase that must be faster than the original rate can only leave
+  // a further 10 s at the old rate when the event starts >15 s away.
+  if(wait<=15+1e-9)return {ok:false,reason:'no-speedup-solution',remaining,rate,wait};
+  const boostRate=(remaining-10*rate)/5;
+  if(!(boostRate>rate))return {ok:false,reason:'no-speedup-solution',remaining,rate,wait};
+  return {ok:true,remaining,rate,wait,boostRate};
+}
+function startPredictionLeadBoost(targetSimTime,label){
+  if(timedRateBoost){showToast('Finish or cancel the current timed boost first');return;}
+  const e=predictionBoostEligibility(targetSimTime);
+  if(!e.ok){
+    if(e.reason==='passed')showToast('That predicted event time has already passed');
+    else if(e.reason==='under10')showToast('That event is already 10 s or less away');
+    else showToast('Too close for an exact 5 s speed-up + 10 s normal-speed lead');
+    refreshPredictionSpeedButtons();
+    return;
+  }
+  const startReal=performance.now();
+  timedRateBoost={
+    targetSimTime,
+    label:label||'Prediction',
+    originalRate:e.rate,
+    originalManualRateMultiplier:manualRateMultiplier,
+    boostRate:e.boostRate,
+    startReal,
+    endReal:startReal+5000
+  };
+  if(paused){paused=false;$('#pauseBtn').textContent='⏸';}
+  updateLabels();updateTimeToolState();
+  refreshPredictionSpeedButtons();
+  showToast(`${label||'Prediction'} · boosting 5 s, then restoring with 10 s remaining`);
+}
+function bindPredictionSpeedButtons(root){
+  root.querySelectorAll('.speed10Btn[data-target-sim-time]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const target=Number(btn.dataset.targetSimTime);
+      startPredictionLeadBoost(target,btn.dataset.eventLabel||'Prediction');
+    });
+  });
+  refreshPredictionSpeedButtons();
+}
+function refreshPredictionSpeedButtons(){
+  document.querySelectorAll('.speed10Btn[data-target-sim-time]').forEach(btn=>{
+    const target=Number(btn.dataset.targetSimTime),e=predictionBoostEligibility(target);
+    btn.hidden=!e.ok||!!timedRateBoost;
+  });
+}
+function updateLabels(){
+  const base=sliderTimeScaleValue(),live=timeScaleValue();
+  $('#timeLabel').textContent=`${formatNum(base,2)}× · ${formatNum(base,2)} y/s`;
+  $('#simRate').textContent=`${formatNum(live,2)} y/s${timedRateBoost?' BOOST':manualRateActive()?` (${formatNum(manualRateMultiplier,3)}× base)`:''}`;
+  const span=viewSpanAU();$('#zoomLabel').textContent=span>1000?`${formatNum(span/63241.077,3)} ly wide`:`${formatNum(span,3)} AU wide`;$('#viewSpan').textContent=span>1000?`${formatNum(span/63241.077,2)} ly`:`${formatNum(span,2)} AU`;
+  $('#trailHistoryLabel').textContent=formatTrailHistory(trailHistoryValue());
+}
+function currentPopulationCount(pid){let n=0;for(const b of bodies)if(b.populationId===pid)n++;return n;}
+function refreshPrimarySelectors(){
+  const primaries=bodies.filter(b=>b.alive&&!b.isTracer).sort((a,b)=>b.mass-a.mass),html=primaries.map(b=>`<option value="${b.id}">${escapeHtml(b.name)} · ${escapeHtml(formatMass(b.mass))}</option>`).join('');
+  for(const id of ['orbitPrimary','populationPrimary']){const el=$('#'+id),old=el.value;el.innerHTML=html||'<option value="">No major bodies</option>';if(primaries.some(b=>String(b.id)===old))el.value=old;}
+}
+function syncSpawnControls(){
+  const orbit=$('#spawnMode').value==='orbit';$('#orbitControls').classList.toggle('hiddenControl',!orbit);$('#spawnModeDesc').textContent=orbit?'Choose a primary body and orbital geometry, then tap an object type to place it directly into that orbit.':'Random encounters enter from an arbitrary direction and can orbit, slingshot, collide, or escape.';
+}
+function applyOrbitPreset(){
+  const p=$('#orbitPreset').value,apo=$('#apoField'),vinf=$('#vinfField');apo.classList.toggle('hiddenControl',p==='hyperbolic');vinf.classList.toggle('hiddenControl',p!=='hyperbolic');
+  const values={circular:[1,1,0],elliptical:[.7,2,5],high:[.25,15,12],cometary:[.4,35,35]};
+  if(values[p]){const [q,Q,i]=values[p];$('#periapsis').value=q;$('#apoapsis').value=Q;$('#orbitInclination').value=i;}
+}
+function syncPopulationControls(resetValues=true){
+  const kind=$('#populationType').value;
+  if(resetValues){if(kind==='belt'){$('#populationInner').value=2.1;$('#populationOuter').value=3.3;$('#populationTilt').value=4;}else{$('#populationInner').value=2000;$('#populationOuter').value=50000;$('#populationTilt').value=180;}}
+  $('#generatePopulation').textContent=kind==='belt'?'Create asteroid belt':'Create Oort cloud';
+  $('#populationDesc').textContent=kind==='belt'?'Creates a low-inclination distribution of rocky tracer bodies on near-Keplerian orbits. They feel major-body gravity but do not gravitationally perturb one another.':'Creates a genuinely 3D, approximately spherical cloud of icy tracer bodies on randomly inclined long-period orbits. A top-down camera shows the 3D cloud in projection.';
+}
+function openRenameObject(id){
+  const b=bodies.find(o=>o.id===id&&o.alive);if(!b)return;
+  renameBodyId=id;
+  $('#renameTitle').textContent='Rename object';
+  $('#renameSubtitle').textContent=`Current name: ${b.name}`;
+  $('#renameInput').value=b.name;
+  $('#renameOverlay').classList.add('show');
+  $('#renameOverlay').setAttribute('aria-hidden','false');
+  requestAnimationFrame(()=>{const input=$('#renameInput');input.focus();input.select();});
+}
+function closeRenameObject(){
+  renameBodyId=null;
+  $('#renameOverlay').classList.remove('show');
+  $('#renameOverlay').setAttribute('aria-hidden','true');
+}
+function saveRenameObject(){
+  const b=bodies.find(o=>o.id===renameBodyId&&o.alive);if(!b){closeRenameObject();return;}
+  const name=$('#renameInput').value.trim().replace(/\s+/g,' ');
+  if(!name){showToast('Name cannot be empty');return;}
+  const old=b.name;b.name=name.slice(0,80);b.isRenamed=true;
+  predictionJobToken++;
+  $('#calcResultSection').classList.add('hiddenControl');
+  $('#calcResultBody').innerHTML='';
+  $('#calcStatus').textContent='Object name changed. Run a new prediction when needed.';
+  refreshObjectsUI(true);refreshPrimarySelectors();ensureCalcSelections();updateSelected();
+  closeRenameObject();
+  showToast(`${old} renamed to ${b.name}`);
+}
+const CUSTOM_OBJECT_TEMPLATES=[
+  {type:'blackHole',label:'Black hole'},
+  {type:'neutronStar',label:'Neutron star'},
+  {type:'sunStar',label:'Sun-sized star'},
+  {type:'blackDwarf',label:'Black dwarf'},
+  {type:'jupiter',label:'Jupiter-sized planet'},
+  {type:'earth',label:'Earth-like planet'},
+  {type:'moon',label:'Moon'},
+  {type:'comet',label:'Comet'},
+  {type:'asteroid',label:'Asteroid'}
+];
+let customObjectTemplates=[];
+let nextCustomTemplateId=1;
+let customTemplateSample=null;
+function customTemplateId(){return `custom-${nextCustomTemplateId++}`;}
+function renderCustomObjectTemplates(){
+  const grid=$('#addObjectGrid'),newBtn=$('#newCustomObjectBtn');if(!grid||!newBtn)return;
+  grid.querySelectorAll('.customSpawnBtn').forEach(el=>el.remove());
+  for(const tpl of customObjectTemplates){
+    const btn=document.createElement('button');btn.type='button';btn.className='primaryBtn customSpawnBtn';btn.dataset.customTemplateId=tpl.id;
+    const mini=tpl.baseLabel||typeInfo[tpl.baseType]?.label||tpl.baseType||'custom';
+    btn.innerHTML=`${escapeHtml(tpl.name)}<span class="mini">Custom · ${escapeHtml(mini)}</span>`;
+    btn.addEventListener('click',()=>spawnCustomTemplate(tpl.id));
+    grid.insertBefore(btn,newBtn);
+  }
+}
+function normalizeCustomTemplate(tpl){
+  if(!tpl||typeof tpl!=='object')return null;
+  const baseType=String(tpl.baseType||tpl.type||'');if(!CUSTOM_OBJECT_TEMPLATES.some(t=>t.type===baseType))return null;
+  const mass=+tpl.mass,radius=+tpl.radius,luminosity=+tpl.luminosity,spin=+tpl.spin;
+  if(!(mass>0)||!(radius>0)||!isFinite(luminosity)||!isFinite(spin))return null;
+  return {
+    id:String(tpl.id||customTemplateId()),baseType,
+    baseLabel:String(tpl.baseLabel||typeInfo[baseType]?.label||baseType),
+    name:String(tpl.name||`Custom ${typeInfo[baseType]?.label||baseType}`).slice(0,80),
+    subtype:String(tpl.subtype||typeInfo[baseType]?.label||baseType).slice(0,100),
+    mass,radius,temp:tpl.temp==null?null:Math.max(0,+tpl.temp||0),luminosity:Math.max(0,luminosity),spin,
+    color:normalizeHexColor(tpl.color)||'#78b8ff',isTracer:!!tpl.isTracer
+  };
+}
+function bodyFromCustomTemplate(tpl){
+  const b=makeBody(tpl.baseType);
+  b.name=tpl.name;b.subtype=tpl.subtype;b.mass=tpl.mass;b.radius=tpl.radius;b.temp=tpl.temp;b.luminosity=tpl.luminosity;b.spin=tpl.spin;b.color=tpl.color;
+  b.isTracer=tpl.isTracer;b.isRenamed=true;b.isCustom=true;b.customTemplateId=tpl.id;b.populationId=null;b.populationKind=null;b.analyticOrbit=null;b.keplerAnchorId=null;
+  b.trail=[];b.trailClock=0;b.age=0;b.createdAt=simTime;return b;
+}
+function spawnCustomTemplate(id){
+  if(bodies.length>=MAX_BODIES){showToast(`Body limit ${MAX_BODIES} reached`);return;}
+  const tpl=customObjectTemplates.find(t=>t.id===id);if(!tpl){showToast('Custom template no longer exists');return;}
+  const b=bodyFromCustomTemplate(tpl),orbitMode=$('#spawnMode').value==='orbit'&&bodies.length;
+  if(orbitMode){if(!placeOrbitingBody(b))return;}else if(!placeIncomingBody(b))return;
+  commitSpawnedBody(b,`${b.name} added from custom template`);
+}
+function sampleCustomTemplate(type){
+  const before=nextId,b=makeBody(type,0,0,0,0,typeInfo[type]?.label||type);nextId=before;b.id=0;b.name=typeInfo[type]?.label||type;return b;
+}
+function updateCustomColorTracks(){
+  const h=+$(`#customHue`).value||0,s=+$(`#customSaturation`).value||0,l=+$(`#customLightness`).value||0;
+  $('#customHueValue').textContent=`${Math.round(h)}°`;$('#customSaturationValue').textContent=`${Math.round(s)}%`;$('#customLightnessValue').textContent=`${Math.round(l)}%`;
+  const pure=hslToHex(h,100,50),sat0=hslToHex(h,0,50),sat1=hslToHex(h,100,50);
+  $('#customSaturation').style.background=`linear-gradient(90deg,${sat0},${sat1})`;
+  $('#customLightness').style.background=`linear-gradient(90deg,#000 0%,${pure} 50%,#fff 100%)`;
+}
+function setCustomColor(hex){
+  const normalized=normalizeHexColor(hex);if(!normalized)return false;
+  const [r,g,b]=hexToRgb(normalized),hsl=rgbToHsl(r,g,b);
+  $('#customColor').value=normalized;$('#customColorHex').value=normalized.toUpperCase();$('#customColorPreview').style.background=normalized;
+  $('#customHue').value=String(Math.round(hsl.h));$('#customSaturation').value=String(Math.round(hsl.s));$('#customLightness').value=String(Math.round(hsl.l));updateCustomColorTracks();return true;
+}
+function updateCustomColorFromSliders(){
+  const hex=hslToHex(+$(`#customHue`).value,+$(`#customSaturation`).value,+$(`#customLightness`).value);
+  $('#customColor').value=hex;$('#customColorHex').value=hex.toUpperCase();$('#customColorPreview').style.background=hex;updateCustomColorTracks();
+}
+function fillCustomFieldsFromBase(){
+  const type=$('#customBaseObject').value;if(!CUSTOM_OBJECT_TEMPLATES.some(t=>t.type===type))return;
+  const base=sampleCustomTemplate(type);customTemplateSample=base;
+  $('#customName').value=`Custom ${typeInfo[type]?.label||type}`;
+  $('#customSubtype').value=base.subtype||typeInfo[type]?.label||type;
+  $('#customMass').value=String(base.mass);
+  $('#customDiameterKm').value=String(base.radius*2*AU_KM);
+  $('#customTemp').value=base.temp==null?'':String(base.temp);
+  $('#customLuminosity').value=String(base.luminosity??0);
+  $('#customSpin').value=String(base.spin??0);
+  setCustomColor(/^#[0-9a-f]{6}$/i.test(base.color||'')?base.color:'#78b8ff');
+  $('#customPhysicsRole').value=base.isTracer?'tracer':'major';
+}
+function openCustomObjectCreator(){
+  const sel=$('#customBaseObject');sel.innerHTML=CUSTOM_OBJECT_TEMPLATES.map(t=>`<option value="${t.type}">${escapeHtml(t.label)}</option>`).join('');
+  if(!sel.value)sel.value='earth';fillCustomFieldsFromBase();$('#customObjectOverlay').classList.add('show');$('#customObjectOverlay').setAttribute('aria-hidden','false');
+}
+function closeCustomObjectCreator(){$('#customObjectOverlay').classList.remove('show');$('#customObjectOverlay').setAttribute('aria-hidden','true');}
+function saveCustomObject(){
+  const type=$('#customBaseObject').value;if(!CUSTOM_OBJECT_TEMPLATES.some(t=>t.type===type)){showToast('Choose a valid base template');return;}
+  const base=customTemplateSample&&customTemplateSample.type===type?customTemplateSample:sampleCustomTemplate(type);
+  const name=$('#customName').value.trim().replace(/\s+/g,' ');if(!name){showToast('Name cannot be empty');return;}
+  const mass=+$(`#customMass`).value,diameterKm=+$(`#customDiameterKm`).value,lum=+$(`#customLuminosity`).value,spin=+$(`#customSpin`).value;
+  if(!(mass>0)||!(diameterKm>0)||!isFinite(lum)||!isFinite(spin)){showToast('Mass, diameter, luminosity, and spin must be valid numbers');return;}
+  const tpl=normalizeCustomTemplate({
+    id:customTemplateId(),baseType:type,baseLabel:CUSTOM_OBJECT_TEMPLATES.find(t=>t.type===type)?.label||typeInfo[type]?.label||type,
+    name:name.slice(0,80),subtype:($('#customSubtype').value.trim()||base.subtype||typeInfo[type]?.label||type).slice(0,100),
+    mass,radius:diameterKm/(2*AU_KM),temp:$('#customTemp').value.trim()===''?null:Math.max(0,+$('#customTemp').value||0),
+    luminosity:Math.max(0,lum),spin,color:normalizeHexColor($('#customColor').value)||base.color,isTracer:$('#customPhysicsRole').value==='tracer'
+  });
+  if(!tpl){showToast('Could not save that template');return;}
+  customObjectTemplates.push(tpl);renderCustomObjectTemplates();closeCustomObjectCreator();
+  showToast(`${tpl.name} added to Add Object`);
+}
+
+
+function bindObjectRowLongPress(el){
+  let timer=null,startX=0,startY=0,pointerId=null,longPressed=false;
+  const clear=()=>{if(timer){clearTimeout(timer);timer=null;}};
+  el.addEventListener('pointerdown',e=>{
+    if(e.target.closest('.rowDelete'))return;
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    clear();pointerId=e.pointerId;startX=e.clientX;startY=e.clientY;longPressed=false;
+    timer=setTimeout(()=>{
+      timer=null;longPressed=true;suppressObjectRowTapUntil=performance.now()+800;
+      openRenameObject(+el.dataset.id);
+      if(navigator.vibrate)try{navigator.vibrate(18);}catch(_){}
+    },560);
+  });
+  el.addEventListener('pointermove',e=>{
+    if(e.pointerId!==pointerId)return;
+    if(Math.hypot(e.clientX-startX,e.clientY-startY)>11)clear();
+  });
+  el.addEventListener('pointerup',e=>{if(e.pointerId===pointerId){clear();pointerId=null;}});
+  el.addEventListener('pointercancel',e=>{if(e.pointerId===pointerId){clear();pointerId=null;}});
+  el.addEventListener('contextmenu',e=>{if(e.pointerType!=='mouse')e.preventDefault();});
+}
+function renderObjectRow(b){
+  return `<div class="objRow ${b.id===selectedId?'active':''}" data-id="${b.id}">
+    <span class="objSwatch" style="color:${b.type==='blackHole'?'#ffb36b':b.color};background:${b.type==='blackHole'?'#111':b.color}"></span>
+    <div><div class="objName">${escapeHtml(b.name)}</div><div class="objMeta">${escapeHtml(typeInfo[b.type]?.label||b.type)}${b.isTracer?' · tracer':''}</div></div>
+    <div class="objMeta">${escapeHtml(formatMass(b.mass))}</div>
+    <button class="rowDelete" data-delete-id="${b.id}" title="Delete ${escapeHtml(b.name)}" aria-label="Delete ${escapeHtml(b.name)}">×</button>
+  </div>`;
+}
+function refreshObjectsUI(force=false){
+  const list=$('#objectList'),now=performance.now();if(!force&&now-lastUIUpdate<250)return;lastUIUpdate=now;$('#bodyCount').textContent=bodies.length;$('#objectBadge').textContent=bodies.length;
+  refreshPrimarySelectors();
+  if(!bodies.length){list.innerHTML='<div class="empty">No objects exist yet.<br>Add one from the Controls tab.</div>';updateSelected();return;}
+  const ungrouped=bodies.filter(b=>b.populationId==null).sort((a,b)=>b.mass-a.mass);let html=ungrouped.map(renderObjectRow).join('');
+  for(const pop of populations){
+    const members=bodies.filter(b=>b.populationId===pop.id),count=members.length;if(!count)continue;const shown=expandedPopulations.get(pop.id)||0;
+    html+=`<div class="populationRow" data-pop-id="${pop.id}"><span class="objSwatch" style="background:${pop.kind==='belt'?'#a58e79':'#c8e9ff'};color:${pop.kind==='belt'?'#a58e79':'#c8e9ff'}"></span><div><div class="objName">${escapeHtml(pop.name)}</div><div class="objMeta">${count.toLocaleString()} surviving objects · ${pop.kind==='belt'?'asteroid belt':'3D Oort cloud'}</div></div><div class="objMeta">${shown?'▾':'▸'}</div><button class="rowDelete popDelete" data-delete-pop="${pop.id}" title="Delete population">×</button></div>`;
+    if(shown){const slice=members.slice(0,shown);html+=`<div data-pop-children="${pop.id}" style="display:flex;flex-direction:column;gap:5px;margin:5px 0 8px 12px">${slice.map(renderObjectRow).join('')}${shown<count?`<button class="ghostBtn moreBtn" data-more-pop="${pop.id}">Show ${Math.min(120,count-shown)} more · ${count-shown} remaining</button>`:''}</div>`;}
+  }
+  list.innerHTML=html;
+  $$('.objRow').forEach(el=>{
+    bindObjectRowLongPress(el);
+    el.onclick=e=>{
+      if(e.target.closest('.rowDelete'))return;
+      if(performance.now()<suppressObjectRowTapUntil)return;
+      handleObjectRowTap(+el.dataset.id);
+    };
+  });
+  $$('.rowDelete[data-delete-id]').forEach(btn=>btn.onclick=e=>{e.stopPropagation();deleteBodyById(+btn.dataset.deleteId);});
+  $$('.populationRow').forEach(row=>row.onclick=e=>{if(e.target.closest('.popDelete'))return;const id=+row.dataset.popId,cur=expandedPopulations.get(id)||0;expandedPopulations.set(id,cur?0:120);refreshObjectsUI(true);});
+  $$('.popDelete').forEach(btn=>btn.onclick=e=>{e.stopPropagation();deletePopulation(+btn.dataset.deletePop);});
+  $$('[data-more-pop]').forEach(btn=>btn.onclick=e=>{e.stopPropagation();const id=+btn.dataset.morePop;expandedPopulations.set(id,(expandedPopulations.get(id)||0)+120);refreshObjectsUI(true);});
+  updateSelected();
+}
+function handleObjectRowTap(id){
+  const now=performance.now(),isDouble=lastObjectTapId===id&&now-lastObjectTapTime<350;lastObjectTapId=id;lastObjectTapTime=now;
+  if(isDouble){clearTimeout(objectTapTimer);objectTapTimer=null;navigateToBody(id,true,true);lastObjectTapId=null;return;}
+  clearTimeout(objectTapTimer);
+  // A single tap focuses/centers but deliberately leaves Settings open. A second tap follows and closes it.
+  navigateToBody(id,false,false);
+  objectTapTimer=setTimeout(()=>{objectTapTimer=null;lastObjectTapId=null;},380);
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function updateSelected(){
+  const card=$('#selectedCard'),b=bodies.find(o=>o.id===selectedId);if(!b){card.classList.remove('show');return;}card.classList.add('show');$('#selectedSwatch').style.background=b.type==='blackHole'?'#111':b.color;$('#selectedSwatch').style.color=b.type==='blackHole'?'#ffb36b':b.color;$('#selectedName').textContent=b.name;$('#selectedType').textContent=b.subtype;
+  const bc=barycenter(),speed=Math.sqrt(b.vx*b.vx+b.vy*b.vy+b.vz*b.vz)*AU_KM/YEAR_S,dist=Math.sqrt((b.x-bc.x)**2+(b.y-bc.y)**2+(b.z-bc.z)**2),grav=gSurfaceLike(b),dens=densityLike(b),pop=b.populationId!=null?populations.find(p=>p.id===b.populationId):null,v=selectedVectorInfo(b),travel=v.travelHeading==null?'—':formatNum(v.travelHeading,3)+'°',force=v.forceHeading==null?'—':formatNum(v.forceHeading,3)+'°';
+  $('#selectedKV').innerHTML=`<div>Mass</div><div>${formatMass(b.mass)}</div><div>Radius</div><div>${formatRadius(b.radius)}</div><div>Diameter</div><div>${formatRadius(b.radius*2)}</div><div>Speed</div><div>${formatNum(speed,2)} km/s</div><div>Travel direction (XY)</div><div>${travel}</div><div>Velocity X / Y</div><div>${formatNum(v.vx,5)} / ${formatNum(v.vy,5)} km/s</div><div>Velocity Z</div><div>${formatNum(v.vz,5)} km/s</div><div>Net-force direction (XY)</div><div>${force}</div><div>Acceleration X / Y</div><div>${formatNum(v.ax,6)} / ${formatNum(v.ay,6)} m/s²</div><div>Acceleration Z</div><div>${formatNum(v.az,6)} m/s²</div><div>Net force X / Y</div><div>${formatNum(v.fx,4)} / ${formatNum(v.fy,4)} N</div><div>Net force Z</div><div>${formatNum(v.fz,4)} N</div><div>Barycenter distance</div><div>${formatDistance(dist)}</div><div>Out-of-plane Z</div><div>${formatDistance(Math.abs(b.z-bc.z))}</div><div>Physics role</div><div>${b.analyticOrbit?'Kepler population tracer':b.keplerAnchorId!=null?'Kepler-protected N-body orbit':b.isTracer?'Dynamic small-body tracer':'Full N-body'}</div>${pop?`<div>Population</div><div>${escapeHtml(pop.name)}</div>`:''}<div>Surface gravity</div><div>${isFinite(grav)?formatNum(grav,2)+' m/s²':'—'}</div><div>Mean density</div><div>${isFinite(dens)?formatNum(dens,2)+' g/cm³':'—'}</div><div>Temperature</div><div>${b.temp?formatNum(b.temp,0)+' K':'—'}</div><div>Impacts survived</div><div>${b.impactCount}</div><div>Simulation age</div><div>${formatNum(b.age,2)} y</div>`;
+}
+function gSurfaceLike(b){const rkm=b.radius*AU_KM;if(rkm<=0)return Infinity;return 1.32712440018e11*b.mass/(rkm*rkm)*1000;}
+function densityLike(b){const kg=b.mass*1.98847e30,m=b.radius*AU_KM*1000;if(m<=0)return Infinity;return (kg/(4/3*Math.PI*m*m*m))/1000;}
+function qualityStatus(substeps){
+  const desired=Math.max(1,Math.ceil((timeScaleValue()/Math.max(fpsEMA,1))/(1/730.5))),ratio=Math.min(1,substeps/desired),txt=$('#qualityText'),maj=bodies.reduce((n,b)=>n+(!b.isTracer?1:0),0),analytic=bodies.reduce((n,b)=>n+(b.analyticOrbit?1:0),0),tr=bodies.length-maj-analytic,kp=bodies.reduce((n,b)=>n+(b.alive&&b.keplerAnchorId!=null?1:0),0);
+  if(ratio>.75){txt.className='desc good';txt.textContent=`High fidelity · ${substeps} global substeps/frame · ${kp} Kepler-protected orbits · ${maj} major bodies + ${tr} dynamic tracers.`}else if(ratio>.3){txt.className='desc warn';txt.textContent=`Balanced · ${substeps} global substeps/frame · ${kp} protected orbits. Strong multi-body encounters may lose accuracy.`}else{txt.className='desc bad';txt.textContent=`Performance mode · ${substeps} global substeps/frame · ${kp} bound orbits remain Kepler-stable; lower the rate for more accurate chaotic encounters.`}
+}
+function calcBodySearchText(b){const pop=b.populationId!=null?populations.find(p=>p.id===b.populationId):null;return `${b.name} ${typeInfo[b.type]?.label||b.type} ${pop?.name||''}`.toLowerCase();}
+function setCalcSelection(slot,id){
+  const b=bodies.find(o=>o.id===id&&o.alive);calcSelection[slot]=b?b.id:null;const input=$(`#calcSearch${slot.toUpperCase()}`);if(input)input.value=b?b.name:'';
+  const res=$(`#calcResults${slot.toUpperCase()}`);if(res)res.classList.remove('show');
+}
+function ensureCalcSelections(){
+  const alive=bodies.filter(b=>b.alive);if(!alive.length){calcSelection.a=calcSelection.b=null;setCalcSelection('a',null);setCalcSelection('b',null);return;}
+  if(!alive.some(b=>b.id===calcSelection.a))calcSelection.a=(bodies.find(b=>b.id===selectedId&&b.alive)||alive[0]).id;
+  if(!alive.some(b=>b.id===calcSelection.b)||calcSelection.b===calcSelection.a)calcSelection.b=null;
+  setCalcSelection('a',calcSelection.a);setCalcSelection('b',calcSelection.b);
+}
+function showCalcMatches(slot,query=''){
+  const result=$(`#calcResults${slot.toUpperCase()}`),q=query.trim().toLowerCase();if(!result)return;
+  const matches=bodies.filter(b=>b.alive&&(!q||calcBodySearchText(b).includes(q))).sort((a,b)=>(a.populationId!=null)-(b.populationId!=null)||b.mass-a.mass).slice(0,30);
+  result.innerHTML=matches.length?matches.map(b=>`<button class="calcSearchItem" type="button" data-calc-slot="${slot}" data-calc-id="${b.id}"><b>${escapeHtml(b.name)}</b><span>${escapeHtml(typeInfo[b.type]?.label||b.type)} · ${escapeHtml(formatMass(b.mass))}</span></button>`).join(''):'<div class="empty" style="padding:14px 8px">No matching objects</div>';
+  result.classList.add('show');result.querySelectorAll('[data-calc-id]').forEach(btn=>btn.addEventListener('pointerdown',e=>e.preventDefault()));result.querySelectorAll('[data-calc-id]').forEach(btn=>btn.onclick=()=>setCalcSelection(slot,+btn.dataset.calcId));
+}
+function bindCalcSearch(slot){
+  const input=$(`#calcSearch${slot.toUpperCase()}`),result=$(`#calcResults${slot.toUpperCase()}`);if(!input||!result)return;
+  input.addEventListener('focus',()=>showCalcMatches(slot,input.value));input.addEventListener('input',()=>{calcSelection[slot]=null;showCalcMatches(slot,input.value);});input.addEventListener('blur',()=>setTimeout(()=>result.classList.remove('show'),140));
+}
+function clonePredictState(b){return {id:b.id,type:b.type,mass:b.mass,radius:b.radius,isTracer:b.isTracer,x:b.x,y:b.y,z:b.z,vx:b.vx,vy:b.vy,vz:b.vz,ax:0,ay:0,az:0};}
+function predictAnalyticState(original,primary,time){
+  const o=original.analyticOrbit;if(!o||!primary)return clonePredictState(original);const n=o.nBase*Math.sqrt(Math.max(primary.mass,1e-12));let M=(o.M0+n*(time-o.epoch))%TAU;if(M<0)M+=TAU;let E=M+o.e*Math.sin(M)*(1+o.e*Math.cos(M));const iters=o.e<.2?1:4;
+  for(let k=0;k<iters;k++){const se=Math.sin(E),ce=Math.cos(E);E-=(E-o.e*se-M)/(1-o.e*ce);}const se=Math.sin(E),ce=Math.cos(E),den=Math.max(1e-9,1-o.e*ce),xp=o.a*(ce-o.e),yp=o.a*o.sqrt1me2*se,dEdt=n/den,vxp=-o.a*se*dEdt,vyp=o.a*o.sqrt1me2*ce*dEdt,P=o.P,Q=o.Q;
+  return {id:original.id,type:original.type,mass:original.mass,radius:original.radius,isTracer:true,x:primary.x+P.x*xp+Q.x*yp,y:primary.y+P.y*xp+Q.y*yp,z:primary.z+P.z*xp+Q.z*yp,vx:primary.vx+P.x*vxp+Q.x*vyp,vy:primary.vy+P.y*vxp+Q.y*vyp,vz:primary.vz+P.z*vxp+Q.z*vyp};
+}
+function predictorAccelerations(majors,tracers){
+  for(const b of majors){b.ax=b.ay=b.az=0;}for(const b of tracers){b.ax=b.ay=b.az=0;}
+  for(let i=0;i<majors.length;i++)for(let j=i+1;j<majors.length;j++){
+    const a=majors[i],b=majors[j],dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z,soft=Math.max(1e-9,(a.radius+b.radius)*.15),r2=dx*dx+dy*dy+dz*dz+soft*soft,invR=1/Math.sqrt(r2),f=G*invR/r2;a.ax+=f*b.mass*dx;a.ay+=f*b.mass*dy;a.az+=f*b.mass*dz;b.ax-=f*a.mass*dx;b.ay-=f*a.mass*dy;b.az-=f*a.mass*dz;
+  }
+  for(const t of tracers)for(const m of majors){const dx=m.x-t.x,dy=m.y-t.y,dz=m.z-t.z,soft=Math.max(1e-9,(m.radius+t.radius)*.15),r2=dx*dx+dy*dy+dz*dz+soft*soft,invR=1/Math.sqrt(r2),f=G*m.mass*invR/r2;t.ax+=f*dx;t.ay+=f*dy;t.az+=f*dz;}
+}
+function predictorLeapfrog(majors,tracers,dt){
+  predictorAccelerations(majors,tracers);for(const b of majors){b.vx+=b.ax*dt*.5;b.vy+=b.ay*dt*.5;b.vz+=b.az*dt*.5;}for(const b of tracers){b.vx+=b.ax*dt*.5;b.vy+=b.ay*dt*.5;b.vz+=b.az*dt*.5;}
+  for(const b of majors){b.x+=b.vx*dt;b.y+=b.vy*dt;b.z+=b.vz*dt;}for(const b of tracers){b.x+=b.vx*dt;b.y+=b.vy*dt;b.z+=b.vz*dt;}
+  predictorAccelerations(majors,tracers);for(const b of majors){b.vx+=b.ax*dt*.5;b.vy+=b.ay*dt*.5;b.vz+=b.az*dt*.5;}for(const b of tracers){b.vx+=b.ax*dt*.5;b.vy+=b.ay*dt*.5;b.vz+=b.az*dt*.5;}
+}
+function relativeVector(a,b){return {x:b.x-a.x,y:b.y-a.y,z:b.z-a.z};}
+function vecLen(v){return Math.sqrt(v.x*v.x+v.y*v.y+v.z*v.z);}
+function segmentClosest(r0,r1){const dx=r1.x-r0.x,dy=r1.y-r0.y,dz=r1.z-r0.z,d2=dx*dx+dy*dy+dz*dz;if(d2<1e-30)return {u:0,d:vecLen(r0)};const u=clamp(-(r0.x*dx+r0.y*dy+r0.z*dz)/d2,0,1),x=r0.x+dx*u,y=r0.y+dy*u,z=r0.z+dz*u;return {u,d:Math.sqrt(x*x+y*y+z*z)};}
+function segmentContactFraction(r0,r1,R){const dx=r1.x-r0.x,dy=r1.y-r0.y,dz=r1.z-r0.z,a=dx*dx+dy*dy+dz*dz,b=2*(r0.x*dx+r0.y*dy+r0.z*dz),c=r0.x*r0.x+r0.y*r0.y+r0.z*r0.z-R*R;if(c<=0)return 0;if(a<1e-30)return null;const disc=b*b-4*a*c;if(disc<0)return null;const root=Math.sqrt(disc),u1=(-b-root)/(2*a),u2=(-b+root)/(2*a);if(u1>=0&&u1<=1)return u1;if(u2>=0&&u2<=1)return u2;return null;}
+function estimatePredictDt(a,b){
+  let tau=Infinity;const majors=bodies.filter(m=>m.alive&&!m.isTracer);
+  for(const o of [a,b]){
+    if(o.analyticOrbit){const p=bodies.find(x=>x.id===o.analyticOrbit.primaryId);if(p)tau=Math.min(tau,Math.sqrt(Math.pow(o.analyticOrbit.a,3)/(G*Math.max(p.mass,1e-12))));continue;}
+    for(const m of majors){if(m.id===o.id)continue;const r=Math.max(distance3(o,m),1e-9);tau=Math.min(tau,Math.sqrt(r*r*r/(G*Math.max(m.mass,1e-12))));}
+  }
+  const sep=Math.max(distance3(a,b),1e-9),rv=Math.sqrt((b.vx-a.vx)**2+(b.vy-a.vy)**2+(b.vz-a.vz)**2);if(rv>1e-12)tau=Math.min(tau,sep/rv);
+  if(!isFinite(tau))tau=1;return clamp(tau/32,1e-8,1000);
+}
+function formatSimOffset(y){if(y<1/365.25)return `${formatNum(y*365.25*24,3)} sim hours`;if(y<1)return `${formatNum(y*365.25,3)} sim days`;return `${formatNum(y,6)} sim years`;}
+function formatRealWait(seconds){if(seconds<.001)return `${formatNum(seconds*1000,3)} ms`;if(seconds<60)return `${formatNum(seconds,3)} s`;if(seconds<3600)return `${formatNum(seconds/60,3)} min`;if(seconds<86400)return `${formatNum(seconds/3600,3)} h`;return `${formatNum(seconds/86400,3)} d`;}
+function predictionTenSecondButton(startSim,offset,label){
+  if(!(offset>1e-12))return '';
+  const target=startSim+offset,eligibility=predictionBoostEligibility(target);
+  if(!eligibility.ok)return '';
+  return `<button class="speed10Btn" type="button" data-target-sim-time="${target}" data-event-label="${escapeHtml(label)}" title="Boost for 5 real seconds, restore the current rate, then reach this predicted time 10 real seconds later">10s</button>`;
+}
+function predictionFootnote(){return `<div class="smallNote">When mathematically possible, <b>10s</b> runs an exact five-real-second speed-up, restores the rate that was active when you tapped it, then leaves ten real seconds at that restored rate before the predicted simulation timestamp. Prediction remains a snapshot calculation, so later interactions or numerical divergence can move the live encounter relative to the predicted timestamp.</div>`;}
+function setPredictionRunning(running){
+  const run=$('#calcRun'),stop=$('#calcStop');if(run)run.disabled=!!running;if(stop)stop.disabled=!running;
+}
+function beginPredictionRun(){const token=++predictionJobToken;activePredictionToken=token;setPredictionRunning(true);return token;}
+function finishPredictionRun(token){if(activePredictionToken===token){activePredictionToken=0;setPredictionRunning(false);}}
+function cancelPredictionRun(){
+  if(!activePredictionToken)return;predictionJobToken++;activePredictionToken=0;setPredictionRunning(false);
+  $('#calcStatus').textContent='Calculation stopped by user.';showToast('Calculation stopped');
+}
+function clearCalcObjectB(){
+  setCalcSelection('b',null);$('#calcSearchB').value='';$('#calcResultsB').classList.remove('show');
+  $('#calcStatus').textContent='Object B cleared. Calculate now scans Object A against every other surviving object.';showToast('Object B cleared · scan-all mode');
+}
+function predictionSafetyPlan(a0,b0){
+  const hVal=$('#calcHorizon').value,isAuto=hVal==='auto';
+  if(isAuto)return {isAuto:true,warn:false};
+  const requested=Math.max(1e-8,+hVal||1);
+  let dtAccuracy;
+  let targetCount=1;
+  if(b0)dtAccuracy=estimatePredictDt(a0,b0);
+  else{
+    const targets=bodies.filter(b=>b.alive&&b.id!==a0.id);targetCount=Math.max(1,targets.length);dtAccuracy=Infinity;
+    for(const target of targets)dtAccuracy=Math.min(dtAccuracy,estimatePredictDt(a0,target));
+    if(!isFinite(dtAccuracy))dtAccuracy=1;
+  }
+  const minSamples=b0?500:450,dt=Math.min(dtAccuracy,requested/minSamples),estimatedSteps=Math.ceil(requested/dt);
+  // Pair work is cheap. One-object scans scale with how many bodies must be checked every step.
+  const safeSteps=b0?7000:clamp(Math.floor(300000/targetCount),450,4500);
+  const safeYears=dt*safeSteps;
+  return {isAuto:false,requested,dtAccuracy,dt,estimatedSteps,safeSteps,safeYears,targetCount,warn:estimatedSteps>safeSteps};
+}
+function closeCalcWarning(){pendingCalcWarningAction=null;$('#calcWarningOverlay').classList.remove('show');$('#calcWarningOverlay').setAttribute('aria-hidden','true');}
+function showCalcWarning(plan,action){
+  pendingCalcWarningAction=action;
+  const safe=Math.max(0,plan.safeYears),ratio=plan.safeSteps?plan.estimatedSteps/plan.safeSteps:Infinity;
+  $('#calcWarningText').innerHTML=`You asked for <b>${escapeHtml(formatSimOffset(plan.requested))}</b>. For this selection, the current phone-safe estimate is about <b>${escapeHtml(formatSimOffset(safe))}</b> (${plan.safeSteps.toLocaleString()} steps). The full request is estimated at <b>${plan.estimatedSteps.toLocaleString()} steps</b>${isFinite(ratio)?` · about ${formatNum(ratio,1)}× the safe workload`:''}.<br><br>If you continue, the calculator will still run the <b>entire requested horizon</b>. It yields between chunks so the page stays responsive, but the calculation may take noticeably longer.`;
+  $('#calcWarningOverlay').classList.add('show');$('#calcWarningOverlay').setAttribute('aria-hidden','false');
+}
+function runPairImpactPrediction(a0,b0,status,section,out){
+  const token=beginPredictionRun(),startSim=simTime,rate=timeScaleValue(),hVal=$('#calcHorizon').value,isAuto=hVal==='auto',dtAccuracy=estimatePredictDt(a0,b0),AUTO_MAX_STEPS=7000,CPU_BUDGET_MS=280,MAX_EVENTS=500;
+  const requested=isAuto?Math.min(10000,dtAccuracy*AUTO_MAX_STEPS):Math.max(1e-8,+hVal||1);
+  const dt=isAuto?dtAccuracy:Math.min(dtAccuracy,requested/500),stepLimit=isAuto?AUTO_MAX_STEPS:Math.ceil(requested/dt),horizon=requested;
+  const majorOriginals=bodies.filter(b=>b.alive&&!b.isTracer),majors=majorOriginals.map(clonePredictState),majorMap=new Map(majors.map(b=>[b.id,b])),dynOriginals=[a0,b0].filter((b,i,arr)=>b.isTracer&&!b.analyticOrbit&&arr.findIndex(x=>x.id===b.id)===i),tracers=dynOriginals.map(clonePredictState),tracerMap=new Map(tracers.map(b=>[b.id,b]));
+  function stateFor(original,t){if(original.analyticOrbit){const p=majorMap.get(original.analyticOrbit.primaryId);return predictAnalyticState(original,p,startSim+t);}return majorMap.get(original.id)||tracerMap.get(original.id)||clonePredictState(original);}
+  let t=0,steps=0,cpuMs=0,events=[],eventsTruncated=false,a=stateFor(a0,0),b=stateFor(b0,0),prevR=relativeVector(a,b),R=collisionRadius(a0,b0),closest={d:vecLen(prevR),t:0},inside=closest.d<=R,lastEvent=-Infinity;
+  if(inside)events.push({t:0});status.textContent=`Calculating pair from simulation t = ${formatNum(startSim,4)} y…`;section.classList.add('hiddenControl');out.innerHTML='';
+  function finish(reason){
+    if(token!==predictionJobToken){finishPredictionRun(token);return;}finishPredictionRun(token);const covered=t,realScale=Math.max(rate,1e-12),realFor=y=>formatRealWait(y/realScale),impacts=events.map((e,i)=>`<div class="impactEvent"><div class="predictionEventText"><strong>Impact ${i+1}</strong><br>In ${formatSimOffset(e.t)} <span class="objMeta">(${realFor(e.t)} real)</span></div>${predictionTenSecondButton(startSim,e.t,`Impact ${i+1}`)}</div>`).join('');
+    status.textContent=`Calculated ${steps.toLocaleString()} steps through ${formatSimOffset(covered)} (${reason}).`;
+    out.innerHTML=`<div class="kv"><div>Mode</div><div>Two-object prediction</div><div>Object A</div><div>${escapeHtml(a0.name)}</div><div>Object B</div><div>${escapeHtml(b0.name)}</div><div>Contact distance</div><div>${formatDistance(R)}</div><div>Calculated horizon</div><div>${formatSimOffset(covered)} <span class="objMeta">(${realFor(covered)} real)</span></div><div>Current playback rate</div><div>${formatNum(rate,3)} y/s</div><div>Closest approach</div><div>${formatDistance(closest.d)}</div><div>Closest approach time</div><div class="calcEventValue"><span>in ${formatSimOffset(closest.t)} <span class="objMeta">(${realFor(closest.t)} real)</span></span>${predictionTenSecondButton(startSim,closest.t,'Closest approach')}</div></div><div class="hr"></div>${events.length?`<div><strong>${events.length}${eventsTruncated?'+':''} distinct impact event${events.length===1&&!eventsTruncated?'':'s'} found</strong></div><div class="impactList">${impacts}</div>${eventsTruncated?'<div class="smallNote">More than 500 impact events occurred; additional events were not stored, but the requested time horizon was still fully calculated.</div>':''}`:`<div><strong>No impact found within the calculated horizon.</strong></div><div class="desc">The closest predicted separation is ${escapeHtml(formatDistance(closest.d))}, occurring in ${escapeHtml(formatSimOffset(closest.t))} (${escapeHtml(realFor(closest.t))} real).</div>`}${predictionFootnote()}`;
+    section.classList.remove('hiddenControl');bindPredictionSpeedButtons(out);
+  }
+  function chunk(){
+    if(token!==predictionJobToken){finishPredictionRun(token);return;}const frameStart=performance.now();let local=0;
+    while(steps<stepLimit&&t<horizon&&local<220&&performance.now()-frameStart<5){
+      const step=Math.min(dt,horizon-t);predictorLeapfrog(majors,tracers,step);t+=step;steps++;local++;a=stateFor(a0,t);b=stateFor(b0,t);const currR=relativeVector(a,b),close=segmentClosest(prevR,currR),closeT=t-step+close.u*step;if(close.d<closest.d)closest={d:close.d,t:closeT};const u=segmentContactFraction(prevR,currR,R),endInside=vecLen(currR)<=R;
+      if(u!=null&&!inside){const eventT=t-step+u*step;if(eventT-lastEvent>Math.max(step*.15,1e-10)){if(events.length<MAX_EVENTS)events.push({t:eventT});else eventsTruncated=true;lastEvent=eventT;}}
+      inside=endInside;prevR=currR;
+    }
+    cpuMs+=performance.now()-frameStart;
+    if(isAuto&&cpuMs>=CPU_BUDGET_MS){finish('phone-safe CPU budget reached');return;}
+    if(steps>=stepLimit||t>=horizon){finish(isAuto?'auto horizon reached':'requested horizon reached');return;}
+    status.textContent=`Calculating… ${Math.min(100,Math.round(100*t/horizon))}% · ${steps.toLocaleString()} / ${stepLimit.toLocaleString()} steps`;requestAnimationFrame(chunk);
+  }
+  requestAnimationFrame(chunk);
+}
+function runSingleObjectPrediction(a0,status,section,out){
+  const targets=bodies.filter(b=>b.alive&&b.id!==a0.id);if(!targets.length){status.textContent='There are no other surviving objects to scan.';return;}
+  const token=beginPredictionRun(),startSim=simTime,rate=timeScaleValue(),hVal=$('#calcHorizon').value,isAuto=hVal==='auto',AUTO_MAX_STEPS=4500,CPU_BUDGET_MS=320,MAX_EVENTS=500;
+  let dtAccuracy=Infinity;for(const target of targets)dtAccuracy=Math.min(dtAccuracy,estimatePredictDt(a0,target));if(!isFinite(dtAccuracy))dtAccuracy=1;
+  const requested=isAuto?Math.min(10000,dtAccuracy*AUTO_MAX_STEPS):Math.max(1e-8,+hVal||1),dt=isAuto?dtAccuracy:Math.min(dtAccuracy,requested/450),stepLimit=isAuto?AUTO_MAX_STEPS:Math.ceil(requested/dt),horizon=requested;
+  const majorOriginals=bodies.filter(b=>b.alive&&!b.isTracer),majors=majorOriginals.map(clonePredictState),majorMap=new Map(majors.map(b=>[b.id,b]));
+  const dynOriginals=bodies.filter(b=>b.alive&&b.isTracer&&!b.analyticOrbit),tracers=dynOriginals.map(clonePredictState),tracerMap=new Map(tracers.map(b=>[b.id,b]));
+  function stateFor(original,t){if(original.analyticOrbit){const p=majorMap.get(original.analyticOrbit.primaryId);return predictAnalyticState(original,p,startSim+t);}return majorMap.get(original.id)||tracerMap.get(original.id)||clonePredictState(original);}
+  const aStart=stateFor(a0,0),tracks=targets.map(o=>{const b=stateFor(o,0),r=relativeVector(aStart,b),R=collisionRadius(a0,o),d=vecLen(r);return {o,prevR:r,R,closestD:d,closestT:0,inside:d<=R,lastEvent:-Infinity};});
+  let t=0,steps=0,cpuMs=0,events=[],eventsTruncated=false;for(const tr of tracks)if(tr.inside){if(events.length<MAX_EVENTS)events.push({target:tr.o,t:0});else eventsTruncated=true;tr.lastEvent=0;}
+  status.textContent=`Scanning ${a0.name} against ${targets.length.toLocaleString()} other objects…`;section.classList.add('hiddenControl');out.innerHTML='';
+  function finish(reason){
+    if(token!==predictionJobToken){finishPredictionRun(token);return;}finishPredictionRun(token);const covered=t,realScale=Math.max(rate,1e-12),realFor=y=>formatRealWait(y/realScale),impactRows=events.sort((x,y)=>x.t-y.t).map((e,i)=>`<div class="impactEvent"><div class="predictionEventText"><strong>${escapeHtml(a0.name)} ↔ ${escapeHtml(e.target.name)}</strong><br>Impact in ${formatSimOffset(e.t)} <span class="objMeta">(${realFor(e.t)} real)</span></div>${predictionTenSecondButton(startSim,e.t,`${a0.name} / ${e.target.name} impact`)}</div>`).join('');
+    const hitIds=new Set(events.map(e=>e.target.id)),closeRows=tracks.filter(tr=>!hitIds.has(tr.o.id)).sort((x,y)=>x.closestD-y.closestD).slice(0,12).map(tr=>`<div class="impactEvent"><div class="predictionEventText"><strong>${escapeHtml(tr.o.name)}</strong><br>${escapeHtml(formatDistance(tr.closestD))} in ${formatSimOffset(tr.closestT)} <span class="objMeta">(${realFor(tr.closestT)} real)</span></div>${predictionTenSecondButton(startSim,tr.closestT,`${a0.name} / ${tr.o.name} closest encounter`)}</div>`).join('');
+    status.textContent=`Scanned ${targets.length.toLocaleString()} objects for ${formatSimOffset(covered)} using ${steps.toLocaleString()} steps (${reason}).`;
+    out.innerHTML=`<div class="kv"><div>Mode</div><div>One-object scan</div><div>Tracked object</div><div>${escapeHtml(a0.name)}</div><div>Other objects scanned</div><div>${targets.length.toLocaleString()}</div><div>Calculated horizon</div><div>${formatSimOffset(covered)} <span class="objMeta">(${realFor(covered)} real)</span></div><div>Current playback rate</div><div>${formatNum(rate,3)} y/s</div></div><div class="hr"></div>${events.length?`<div><strong>${events.length}${eventsTruncated?'+':''} distinct predicted impact event${events.length===1&&!eventsTruncated?'':'s'}</strong></div><div class="impactList">${impactRows}</div>${eventsTruncated?'<div class="smallNote">More than 500 impact events occurred; additional events were not stored, but the requested time horizon was still fully calculated.</div>':''}`:`<div><strong>No impacts found within the calculated horizon.</strong></div>`}<div class="hr"></div><div><strong>Nearest close encounters</strong></div><div class="desc">Showing the ${Math.min(12,Math.max(0,tracks.length-hitIds.size))} nearest non-impact closest approaches found in the calculated period.</div><div class="impactList">${closeRows||'<div class="empty">No non-impact encounters available.</div>'}</div>${predictionFootnote()}`;
+    section.classList.remove('hiddenControl');bindPredictionSpeedButtons(out);
+  }
+  function chunk(){
+    if(token!==predictionJobToken){finishPredictionRun(token);return;}const frameStart=performance.now();let local=0;
+    while(steps<stepLimit&&t<horizon&&local<70&&performance.now()-frameStart<4.5){
+      const step=Math.min(dt,horizon-t);predictorLeapfrog(majors,tracers,step);t+=step;steps++;local++;const a=stateFor(a0,t);
+      for(const tr of tracks){const b=stateFor(tr.o,t),currR=relativeVector(a,b),close=segmentClosest(tr.prevR,currR),closeT=t-step+close.u*step;if(close.d<tr.closestD){tr.closestD=close.d;tr.closestT=closeT;}const u=segmentContactFraction(tr.prevR,currR,tr.R),endInside=vecLen(currR)<=tr.R;if(u!=null&&!tr.inside){const eventT=t-step+u*step;if(eventT-tr.lastEvent>Math.max(step*.15,1e-10)){if(events.length<MAX_EVENTS)events.push({target:tr.o,t:eventT});else eventsTruncated=true;tr.lastEvent=eventT;}}tr.inside=endInside;tr.prevR=currR;}
+    }
+    cpuMs+=performance.now()-frameStart;if(isAuto&&cpuMs>=CPU_BUDGET_MS){finish('phone-safe CPU budget reached');return;}
+    if(steps>=stepLimit||t>=horizon){finish(isAuto?'auto horizon reached':'requested horizon reached');return;}
+    status.textContent=`Scanning… ${Math.min(100,Math.round(100*t/horizon))}% · ${steps.toLocaleString()} / ${stepLimit.toLocaleString()} steps · ${targets.length.toLocaleString()} objects`;requestAnimationFrame(chunk);
+  }
+  requestAnimationFrame(chunk);
+}
+function runImpactPrediction(skipWarning=false){
+  const a0=bodies.find(b=>b.id===calcSelection.a&&b.alive),b0=bodies.find(b=>b.id===calcSelection.b&&b.alive),status=$('#calcStatus'),section=$('#calcResultSection'),out=$('#calcResultBody');
+  if(!a0){status.textContent='Select Object A first.';return;}
+  if(!b0&&$('#calcSearchB').value.trim()){status.textContent='Choose Object B from the search results, or clear the Object B field to scan against all objects.';return;}
+  if(b0&&a0.id===b0.id){status.textContent='Object B must be different from Object A.';return;}
+  const plan=predictionSafetyPlan(a0,b0);
+  if(!skipWarning&&plan.warn){showCalcWarning(plan,()=>runImpactPrediction(true));return;}
+  if(b0)runPairImpactPrediction(a0,b0,status,section,out);else runSingleObjectPrediction(a0,status,section,out);
+}
+
+const GRAVITY_STATE_FORMAT='gravity-lab-state';
+const GRAVITY_STATE_VERSION=1;
+const SAVED_CONTROL_IDS=[
+  'spawnMode','orbitPrimary','orbitPreset','periapsis','apoapsis','orbitInclination','vinf',
+  'populationType','populationPrimary','populationCount','populationInner','populationOuter','populationTilt',
+  'timeScale','impacts','zoomRange','trailsToggle','trailHistory','labelsToggle','gridToggle','centerToggle',
+  'calcHorizon'
+];
+function captureControlState(){
+  const out={};
+  for(const id of SAVED_CONTROL_IDS){
+    const el=$('#'+id);if(!el)continue;
+    out[id]=el.type==='checkbox'?!!el.checked:el.value;
+  }
+  const slider=$('#timeScale');
+  out.timeScaleMin=slider.min;out.timeScaleMax=slider.max;
+  return out;
+}
+function applyControlState(saved={}){
+  for(const id of SAVED_CONTROL_IDS){
+    if(!(id in saved))continue;const el=$('#'+id);if(!el)continue;
+    if(el.type==='checkbox')el.checked=!!saved[id];else el.value=String(saved[id]);
+  }
+  const slider=$('#timeScale');
+  if(saved.timeScaleMin!=null)slider.min=String(saved.timeScaleMin);
+  if(saved.timeScaleMax!=null)slider.max=String(saved.timeScaleMax);
+}
+function activeTabName(){return document.querySelector('.tab.active')?.dataset.tab||'controls';}
+function exportSimulationState(){
+  const now=performance.now(),boost=timedRateBoost?{
+    targetSimTime:timedRateBoost.targetSimTime,
+    label:timedRateBoost.label,
+    originalRate:timedRateBoost.originalRate,
+    originalManualRateMultiplier:timedRateBoost.originalManualRateMultiplier,
+    boostRate:timedRateBoost.boostRate,
+    remainingBoostSeconds:Math.max(0,(timedRateBoost.endReal-now)/1000)
+  }:null;
+  return {
+    format:GRAVITY_STATE_FORMAT,
+    version:GRAVITY_STATE_VERSION,
+    exportedAt:new Date().toISOString(),
+    simulation:{
+      simTime,nextId,nextPopulationId,paused,impactsEnabled,trailsEnabled,labelsEnabled,gridEnabled,autoCenter,
+      selectedId,followedId,maxZoomOutActive,cam:{...cam},pan:{...pan},analyticUpdateCursor,manualRateMultiplier,
+      calcSelection:{...calcSelection},expandedPopulations:[...expandedPopulations.entries()]
+    },
+    controls:captureControlState(),
+    playback:{baseRate:sliderTimeScaleValue(),liveRate:timeScaleValue(),manualRateMultiplier,timedBoostActive:!!timedRateBoost},
+    ui:{activeTab:activeTabName(),panelHidden:$('#panel').classList.contains('hidden')},
+    populations:JSON.parse(JSON.stringify(populations)),
+    customObjectTemplates:JSON.parse(JSON.stringify(customObjectTemplates)),
+    nextCustomTemplateId,
+    bodies:JSON.parse(JSON.stringify(bodies)),
+    timedRateBoost:boost
+  };
+}
+function downloadSimulationState(){
+  try{
+    const state=exportSimulationState(),json=JSON.stringify(state,null,2),blob=new Blob([json],{type:'application/json'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a'),stamp=new Date().toISOString().replace(/[:.]/g,'-');
+    a.href=url;a.download=`gravity-lab-state-${stamp}.gravitylab.json`;a.style.display='none';document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    $('#stateIOStatus').textContent=`Exported ${bodies.length.toLocaleString()} objects at simulation t = ${formatNum(simTime,6)} y.`;
+    showToast('Simulation state exported');
+  }catch(err){
+    console.error(err);$('#stateIOStatus').textContent='Export failed: '+err.message;showToast('State export failed');
+  }
+}
+function finiteOr(v,fallback=0){return Number.isFinite(+v)?+v:fallback;}
+function normalizeImportedBody(b){
+  if(!b||typeof b!=='object')throw new Error('Invalid body record');
+  const numeric=['id','mass','radius','x','y','z','vx','vy','vz','ax','ay','az','temp','spin','luminosity','populationId','keplerAnchorId','trailClock','age','phase','createdAt','impactCount','mergedFrom'];
+  const out={...b};
+  for(const k of numeric)if(out[k]!=null&&!Number.isFinite(+out[k]))throw new Error(`Invalid body field: ${k}`);
+  out.id=finiteOr(out.id);
+  out.x=finiteOr(out.x);out.y=finiteOr(out.y);out.z=finiteOr(out.z);out.vx=finiteOr(out.vx);out.vy=finiteOr(out.vy);out.vz=finiteOr(out.vz);
+  out.ax=finiteOr(out.ax);out.ay=finiteOr(out.ay);out.az=finiteOr(out.az);out.mass=Math.max(0,finiteOr(out.mass));out.radius=Math.max(0,finiteOr(out.radius));
+  out.alive=out.alive!==false;out.isTracer=!!out.isTracer;out.isRenamed=!!out.isRenamed;out.trail=Array.isArray(out.trail)?out.trail:[];
+  return out;
+}
+function importSimulationStateObject(state){
+  if(!state||state.format!==GRAVITY_STATE_FORMAT)throw new Error('This is not a Gravity Lab state file');
+  if(state.version!==GRAVITY_STATE_VERSION)throw new Error(`Unsupported state version ${state.version}`);
+  if(!Array.isArray(state.bodies)||state.bodies.length>MAX_BODIES)throw new Error('Invalid or oversized body list');
+  predictionJobToken++;
+  timedRateBoost=null;
+  effects=[];
+  bodies=state.bodies.map(normalizeImportedBody);
+  populations=Array.isArray(state.populations)?JSON.parse(JSON.stringify(state.populations)):[];
+  nextCustomTemplateId=Math.max(1,finiteOr(state.nextCustomTemplateId,1));
+  customObjectTemplates=Array.isArray(state.customObjectTemplates)?state.customObjectTemplates.map(normalizeCustomTemplate).filter(Boolean):[];
+  for(const tpl of customObjectTemplates){const m=String(tpl.id).match(/custom-(\d+)/);if(m)nextCustomTemplateId=Math.max(nextCustomTemplateId,+m[1]+1);}
+  const s=state.simulation||{};
+  simTime=finiteOr(s.simTime,0);
+  nextId=Math.max(1,finiteOr(s.nextId,Math.max(0,...bodies.map(b=>b.id))+1));
+  nextPopulationId=Math.max(1,finiteOr(s.nextPopulationId,1));
+  paused=!!s.paused;
+  impactsEnabled=s.impactsEnabled!==false;trailsEnabled=s.trailsEnabled!==false;labelsEnabled=s.labelsEnabled!==false;gridEnabled=s.gridEnabled!==false;autoCenter=s.autoCenter!==false;
+  selectedId=bodies.some(b=>b.id===s.selectedId)?s.selectedId:null;
+  followedId=bodies.some(b=>b.id===s.followedId)?s.followedId:null;
+  maxZoomOutActive=!!s.maxZoomOutActive;
+  cam={x:finiteOr(s.cam?.x),y:finiteOr(s.cam?.y),zoom:clamp(finiteOr(s.cam?.zoom,1),1e-8,1e4)};
+  pan={x:finiteOr(s.pan?.x),y:finiteOr(s.pan?.y)};
+  analyticUpdateCursor=Math.max(0,finiteOr(s.analyticUpdateCursor,0));
+  manualRateMultiplier=clamp(finiteOr(s.manualRateMultiplier,1),1e-12,1e12);
+  calcSelection={a:bodies.some(b=>b.id===s.calcSelection?.a)?s.calcSelection.a:null,b:bodies.some(b=>b.id===s.calcSelection?.b)?s.calcSelection.b:null};
+  expandedPopulations=new Map(Array.isArray(s.expandedPopulations)?s.expandedPopulations:[]);
+  applyControlState(state.controls||{});
+  if(state.playback?.baseRate>0)setSliderRateDisplay(+state.playback.baseRate);
+  if(state.playback?.manualRateMultiplier>0)manualRateMultiplier=clamp(+state.playback.manualRateMultiplier,1e-12,1e12);
+  // Simulation booleans are authoritative; mirror them to controls.
+  $('#impacts').checked=impactsEnabled;$('#trailsToggle').checked=trailsEnabled;$('#labelsToggle').checked=labelsEnabled;$('#gridToggle').checked=gridEnabled;$('#centerToggle').checked=autoCenter;
+  $('#pauseBtn').textContent=paused?'▶':'⏸';
+  lastPopulationRealUpdate=performance.now();displayPositions.clear();gesturePointers.clear();gestureMode=null;gestureStart=null;dragging=false;
+  refreshPrimarySelectors();
+  // Re-apply selector IDs after their options have been rebuilt.
+  applyControlState(state.controls||{});
+  if(state.playback?.baseRate>0)setSliderRateDisplay(+state.playback.baseRate);
+  if(state.playback?.manualRateMultiplier>0)manualRateMultiplier=clamp(+state.playback.manualRateMultiplier,1e-12,1e12);
+  syncSpawnControls();applyOrbitPresetVisibilityOnly();syncPopulationControls(false);
+  syncZoomSlider();updateLabels();renderCustomObjectTemplates();refreshObjectsUI(true);ensureCalcSelections();
+  $('#calcResultSection').classList.add('hiddenControl');$('#calcResultBody').innerHTML='';$('#calcStatus').textContent='Imported state. Run a new prediction when needed.';
+  const tab=state.ui?.activeTab||'controls';switchTab(['controls','objects','calculator','info'].includes(tab)?tab:'controls');
+  hidePanel(!!state.ui?.panelHidden);
+  if(state.timedRateBoost&&finiteOr(state.timedRateBoost.remainingBoostSeconds)>0){
+    const b=state.timedRateBoost,startReal=performance.now(),remaining=Math.min(5,Math.max(0,finiteOr(b.remainingBoostSeconds)));
+    // Legacy boost-state files stored the pre-boost base slider explicitly because
+    // older builds moved the slider during the boost. Recover that base when present.
+    if(b.originalSliderValue!=null)$('#timeScale').value=String(b.originalSliderValue);
+    if(b.originalSliderMin!=null)$('#timeScale').min=String(b.originalSliderMin);
+    if(b.originalSliderMax!=null)$('#timeScale').max=String(b.originalSliderMax);
+    const importedManual=finiteOr(b.originalManualRateMultiplier,manualRateMultiplier);
+    manualRateMultiplier=clamp(importedManual,1e-12,1e12);
+    timedRateBoost={
+      targetSimTime:finiteOr(b.targetSimTime,simTime),label:String(b.label||'Prediction'),
+      originalRate:Math.max(1e-15,finiteOr(b.originalRate,sliderTimeScaleValue()*manualRateMultiplier)),
+      originalManualRateMultiplier:manualRateMultiplier,
+      boostRate:Math.max(1e-15,finiteOr(b.boostRate,sliderTimeScaleValue()*manualRateMultiplier)),
+      startReal,endReal:startReal+remaining*1000
+    };
+    updateLabels();
+  }
+  updateTimeToolState();refreshPredictionSpeedButtons();
+}
+function applyOrbitPresetVisibilityOnly(){
+  const p=$('#orbitPreset').value;$('#apoField').classList.toggle('hiddenControl',p==='hyperbolic');$('#vinfField').classList.toggle('hiddenControl',p!=='hyperbolic');
+}
+async function importSimulationStateFile(file){
+  if(!file)return;
+  if(file.size>80*1024*1024)throw new Error('State file is too large for this simulator');
+  const raw=await file.text(),state=JSON.parse(raw);
+  importSimulationStateObject(state);
+  $('#stateIOStatus').textContent=`Imported ${bodies.length.toLocaleString()} objects at simulation t = ${formatNum(simTime,6)} y. Current system was replaced.`;
+  showToast('Simulation state imported');
+}
+
+function presetDisplayName(filename){
+  const stem=String(filename).replace(/\.gravitylab\.json$/i,'').replace(/\.json$/i,'').trim();
+  const spaced=stem.replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  if(!spaced)return 'Unnamed preset';
+  return spaced===spaced.toLowerCase()?spaced.replace(/(^|\s)([a-z])/g,(_,lead,c)=>lead+c.toUpperCase()):spaced;
+}
+async function fetchPresetEntries(){
+  // presets/index.json is the single source of truth. A previous build queried a
+  // Netlify Function first; a stale function bundle could therefore hide newer
+  // entries that were already present in this manifest.
+  const url=`./presets/index.json?v=${Date.now()}`;
+  const res=await fetch(url,{cache:'no-store'});
+  if(!res.ok)throw new Error(`preset manifest: HTTP ${res.status}`);
+  const payload=await res.json(),raw=Array.isArray(payload)?payload:(payload.presets||[]);
+  if(!Array.isArray(raw))throw new Error('preset manifest: invalid response');
+  const seen=new Set(),entries=[];
+  for(const item of raw){
+    if(!item||typeof item.file!=='string'||!item.file.trim())continue;
+    const file=item.file.trim();
+    if(seen.has(file))continue;
+    seen.add(file);
+    entries.push({file,name:(typeof item.name==='string'&&item.name.trim())?item.name.trim():presetDisplayName(file)});
+  }
+  return {entries,source:'preset manifest',generatedAt:payload.generatedAt||null};
+}
+async function refreshPresetDropdown(){
+  const select=$('#presetSelect'),status=$('#presetStatus');
+  if(!select)return;
+  select.disabled=true;select.innerHTML='<option value="">Loading presets…</option>';
+  try{
+    const result=await fetchPresetEntries(),entries=result.entries;
+    select.innerHTML='<option value="">Choose a preset…</option>'+entries.map(p=>`<option value="${escapeHtml(p.file)}">${escapeHtml(p.name||presetDisplayName(p.file))}</option>`).join('');
+    select.disabled=false;
+    const stamp=result.generatedAt?` · manifest ${new Date(result.generatedAt).toLocaleString()}`:'';
+    status.textContent=entries.length?`${entries.length} preset${entries.length===1?'':'s'} available (${result.source}${stamp}). Choosing one immediately replaces the running simulation.`:'No preset JSON files are listed in presets/index.json.';
+  }catch(err){
+    console.error(err);select.innerHTML='<option value="">Preset list unavailable</option>';status.textContent='Could not load presets/index.json. Confirm that file is deployed and contains valid JSON.';
+  }
+}
+async function loadPresetFile(filename){
+  if(!filename)return;
+  const select=$('#presetSelect'),status=$('#presetStatus');select.disabled=true;status.textContent=`Loading ${presetDisplayName(filename)}…`;
+  try{
+    const url='./presets/'+encodeURIComponent(filename);
+    const res=await fetch(url,{cache:'no-store'});if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const state=await res.json();importSimulationStateObject(state);
+    status.textContent=`Loaded preset: ${presetDisplayName(filename)}.`;showToast(`Preset loaded · ${presetDisplayName(filename)}`);
+  }catch(err){console.error(err);status.textContent=`Preset load failed: ${err.message}`;showToast('Preset load failed');}
+  finally{select.disabled=false;}
+}
+
+function switchTab(name){$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));$$('.tabPane').forEach(p=>p.classList.toggle('active',p.id===`tab-${name}`));if(name==='objects')refreshObjectsUI(true);if(name==='calculator')ensureCalcSelections();}
+$$('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
+bindCalcSearch('a');bindCalcSearch('b');$('#calcRun').onclick=()=>runImpactPrediction(false);$('#calcStop').onclick=cancelPredictionRun;$('#calcClearB').onclick=clearCalcObjectB;
+$$('.addObj').forEach(btn=>btn.onclick=()=>addObjectByMode(btn.dataset.type));
+$('#newCustomObjectBtn').onclick=openCustomObjectCreator;
+$('#customBaseObject').onchange=fillCustomFieldsFromBase;
+for(const id of ['customHue','customSaturation','customLightness'])$('#'+id).addEventListener('input',updateCustomColorFromSliders);
+$('#customColorHex').addEventListener('change',()=>{if(!setCustomColor($('#customColorHex').value)){showToast('Enter a valid 6-digit hex color');$('#customColorHex').value=$('#customColor').value.toUpperCase();}});
+$('#customColorHex').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}});
+$('#customCancelBtn').onclick=closeCustomObjectCreator;
+$('#customSaveBtn').onclick=saveCustomObject;
+$('#customObjectOverlay').addEventListener('pointerdown',e=>{if(e.target===$('#customObjectOverlay'))closeCustomObjectCreator();});
+$('#calcWarningCancel').onclick=closeCalcWarning;
+$('#calcWarningContinue').onclick=()=>{const action=pendingCalcWarningAction;closeCalcWarning();if(action)action();};
+$('#calcWarningOverlay').addEventListener('pointerdown',e=>{if(e.target===$('#calcWarningOverlay'))closeCalcWarning();});
+$('#spawnMode').onchange=syncSpawnControls;$('#orbitPreset').onchange=applyOrbitPreset;$('#populationType').onchange=()=>syncPopulationControls(true);$('#generatePopulation').onclick=generatePopulation;
+$('#timeScale').addEventListener('input',()=>{
+  if(timedRateBoost)cancelTimedRateBoost('Timed boost cancelled by manual rate change');
+  prepareRateChange();
+  manualRateMultiplier=1;
+  updateLabels();updateTimeToolState();refreshPredictionSpeedButtons();
+});
+$('#slowTimeBtn').onclick=()=>adjustManualRate(.5);
+$('#fastTimeBtn').onclick=()=>adjustManualRate(2);
+$('#timeCenterBtn').onclick=handleTimeCenter;
+$('#exportStateBtn').onclick=downloadSimulationState;
+$('#importStateBtn').onclick=()=>$('#importStateFile').click();
+$('#presetSelect').addEventListener('change',e=>{if(e.target.value)loadPresetFile(e.target.value);});
+$('#refreshPresetsBtn').onclick=refreshPresetDropdown;
+$('#renameCancelBtn').onclick=closeRenameObject;
+$('#renameSaveBtn').onclick=saveRenameObject;
+$('#renameInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();saveRenameObject();}
+  else if(e.key==='Escape'){e.preventDefault();closeRenameObject();}
+});
+$('#renameOverlay').addEventListener('pointerdown',e=>{if(e.target===$('#renameOverlay'))closeRenameObject();});
+$('#importStateFile').addEventListener('change',async e=>{
+  const file=e.target.files?.[0];if(!file)return;
+  try{await importSimulationStateFile(file);}catch(err){console.error(err);$('#stateIOStatus').textContent='Import failed: '+err.message;showToast('State import failed');}
+  finally{e.target.value='';}
+});
+$('#impacts').onchange=e=>{impactsEnabled=e.target.checked;showToast(impactsEnabled?'Impacts enabled':'Impacts disabled');};$('#trailsToggle').onchange=e=>{trailsEnabled=e.target.checked;showToast(trailsEnabled?'Showing normal trails':'Showing focused-object trail only');};$('#trailHistory').addEventListener('input',()=>{const history=trailHistoryValue();for(const b of bodies)pruneTrail(b,simTime,history);updateLabels();});$('#labelsToggle').onchange=e=>labelsEnabled=e.target.checked;$('#gridToggle').onchange=e=>gridEnabled=e.target.checked;$('#centerToggle').onchange=e=>{autoCenter=e.target.checked;if(autoCenter){followedId=null;pan.x=pan.y=0;}};
+$('#zoomRange').addEventListener('input',e=>{const v=parseFloat(e.target.value);maxZoomOutActive=v<=-7.999;if(maxZoomOutActive)fitAllAtMaximumZoom();else setZoomBySlider(v);updateLabels();});
+$('#resetView').onclick=()=>{maxZoomOutActive=false;cam.x=cam.y=0;cam.zoom=1;pan.x=pan.y=0;followedId=null;syncZoomSlider();updateLabels();};$('#pauseBtn').onclick=()=>togglePause();$('#hideBtn').onclick=()=>hidePanel(true);$('#gear').onclick=()=>hidePanel(false);bindHoldZoom($('#zoomOutBtn'),1/1.18);bindHoldZoom($('#zoomInBtn'),1.18);
+$('#objectCountPill').onclick=()=>{hidePanel(false);switchTab('objects');};$('#objectCountPill').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#objectCountPill').click();}};
+$('#clearBtn').onclick=()=>{if(timedRateBoost)restoreTimedRateBoost(false);bodies=[];effects=[];populations=[];expandedPopulations.clear();selectedId=null;followedId=null;calcSelection={a:null,b:null};predictionJobToken++;refreshObjectsUI(true);showToast('System cleared');};$('#demoBtn').onclick=()=>loadDemo();
+$('#followBtn').onclick=()=>{const b=bodies.find(o=>o.id===selectedId);if(!b)return;followedId=followedId===b.id?null:b.id;autoCenter=false;$('#centerToggle').checked=false;showToast(followedId?'Camera following selected body':'Follow released');};$('#deleteSelected').onclick=()=>deleteSelected();
+function hidePanel(v){
+  $('#panel').classList.toggle('hidden',v);
+  $('#floatingTools').classList.toggle('show',v);
+  $('#timeTools').classList.toggle('show',v);
+  $('#topbar').classList.toggle('simControlsVisible',v);
+  updateTimeToolState();
+}
+function togglePause(){
+  if(timedRateBoost){
+    cancelTimedRateBoost('Timed boost cancelled by pause');
+    paused=true;$('#pauseBtn').textContent='▶';updateTimeToolState();showToast('Paused');return;
+  }
+  paused=!paused;$('#pauseBtn').textContent=paused?'▶':'⏸';updateTimeToolState();showToast(paused?'Paused':'Running');
+}
+function navigateToBody(id,follow=false,closePanel=false){
+  const b=bodies.find(o=>o.id===id);if(!b)return;selectedId=id;maxZoomOutActive=false;cam.x=b.x;cam.y=b.y;pan.x=pan.y=0;if(cam.zoom<.2)cam.zoom=.2;syncZoomSlider();autoCenter=false;$('#centerToggle').checked=false;followedId=follow?id:null;updateSelected();if(closePanel)hidePanel(true);showToast(follow?`Following ${b.name}`:`Centered on ${b.name}`);
+}
+function deleteBodyById(id){const idx=bodies.findIndex(b=>b.id===id);if(idx<0)return;const name=bodies[idx].name;bodies.splice(idx,1);for(const b of bodies)if(b.keplerAnchorId===id)b.keplerAnchorId=null;if(followedId===id)followedId=null;if(selectedId===id)selectedId=null;if(calcSelection.a===id)calcSelection.a=null;if(calcSelection.b===id)calcSelection.b=null;predictionJobToken++;populations=populations.filter(p=>currentPopulationCount(p.id)>0);refreshObjectsUI(true);showToast(`${name} removed`);}
+function deletePopulation(pid){const pop=populations.find(p=>p.id===pid);if(!pop)return;const ids=new Set(bodies.filter(b=>b.populationId===pid).map(b=>b.id));bodies=bodies.filter(b=>b.populationId!==pid);if(ids.has(selectedId))selectedId=null;if(ids.has(followedId))followedId=null;if(ids.has(calcSelection.a))calcSelection.a=null;if(ids.has(calcSelection.b))calcSelection.b=null;predictionJobToken++;populations=populations.filter(p=>p.id!==pid);expandedPopulations.delete(pid);refreshObjectsUI(true);showToast(`${pop.name} removed`);}
+function deleteSelected(){if(selectedId!=null)deleteBodyById(selectedId);}
+function loadDemo(){
+  if(timedRateBoost)restoreTimedRateBoost(false);
+  bodies=[];effects=[];populations=[];expandedPopulations.clear();lastPopulationRealUpdate=0;analyticUpdateCursor=0;simTime=0;selectedId=null;followedId=null;maxZoomOutActive=false;cam.x=cam.y=0;cam.zoom=1;pan.x=pan.y=0;manualRateMultiplier=1;nextId=1;nextPopulationId=1;syncZoomSlider();
+
+  const sun=makeBody('sunStar',0,0,0,0,'Sun');sun.mass=1;sun.radius=RSUN_AU;sun.color='#fff1c7';sun.temp=5772;sun.luminosity=1;sun.subtype='G-type main-sequence star';
+  bodies.push(sun);
+
+  const addPlanet=(type,name,mass,radius,a,e,inc,color,temp,subtype)=>{
+    const p=makeBody(type,0,0,0,0,name);p.mass=mass;p.radius=radius;p.color=color;p.temp=temp;p.subtype=subtype;
+    placeElliptical(p,sun,a*(1-e),a*(1+e),inc);p.keplerAnchorId=sun.id;bodies.push(p);return p;
+  };
+  // Semi-major axes, eccentricities, and inclinations are representative present-day Solar-System values.
+  const mercury=addPlanet('mercury','Mercury',M_MERCURY,RMERCURY_AU,.387098,.20563,7.005,'#aaa39b',440,'Rocky planet');
+  const venus=addPlanet('venus','Venus',M_VENUS,RVENUS_AU,.723332,.00677,3.395,'#d8a85f',737,'Cloud-covered rocky planet');
+  const earth=addPlanet('earth','Earth',M_EARTH,REARTH_AU,1,.01671,.00005,'#4aa2e8',288,'Rocky planet');
+  const mars=addPlanet('mars','Mars',M_MARS,RMARS_AU,1.523679,.0934,1.85,'#c76543',210,'Rocky planet');
+  const jupiter=addPlanet('jupiter','Jupiter',M_JUP,RJUP_AU,5.2044,.0489,1.304,'#d5aa7a',165,'Gas giant');
+  const saturn=addPlanet('saturn','Saturn',M_SATURN,RSATURN_AU,9.5826,.0565,2.485,'#d9bd83',134,'Ringed gas giant');
+  const uranus=addPlanet('uranus','Uranus',M_URANUS,RURANUS_AU,19.2184,.0463,.773,'#82d9df',76,'Ice giant');
+  const neptune=addPlanet('neptune','Neptune',M_NEPTUNE,RNEPTUNE_AU,30.11,.00946,1.77,'#477de0',72,'Ice giant');
+
+  // Only Earth receives a moon in the default preset.
+  const moon=makeBody('moon',0,0,0,0,'Moon');moon.mass=M_MOON;moon.radius=RMOON_AU;moon.subtype='Earth satellite';
+  placeElliptical(moon,earth,.00257,.00257,5.145);moon.keplerAnchorId=earth.id;bodies.push(moon);
+
+  const beltId=nextPopulationId++;
+  populations.push({id:beltId,kind:'belt',name:'Main Asteroid Belt',primaryId:sun.id,createdAt:simTime});
+  for(let i=0;i<100;i++){
+    const a=makeBody('asteroid');a.populationId=beltId;a.populationKind='belt';setAnalyticOrbit(a,sun,rand(2.1,3.3),rand(0,.12),Math.abs(rand(-7,7)));bodies.push(a);
+  }
+  expandedPopulations.set(beltId,0);
+
+  const oortId=nextPopulationId++;
+  populations.push({id:oortId,kind:'oort',name:'Oort Cloud',primaryId:sun.id,createdAt:simTime});
+  for(let i=0;i<100;i++){
+    const o=makeBody('oort');o.populationId=oortId;o.populationKind='oort';
+    setAnalyticOrbit(o,sun,randLog(2000,50000),rand(.15,.96),Math.acos(rand(-1,1))*180/Math.PI);bodies.push(o);
+  }
+  expandedPopulations.set(oortId,0);
+
+  // Put the initialized system into its center-of-momentum frame without changing relative velocities.
+  let totalMass=0,px=0,py=0,pz=0;
+  for(const b of bodies){if(b.isTracer)continue;totalMass+=b.mass;px+=b.mass*b.vx;py+=b.mass*b.vy;pz+=b.mass*b.vz;}
+  if(totalMass>0){const vx=px/totalMass,vy=py/totalMass,vz=pz/totalMass;for(const b of bodies){b.vx-=vx;b.vy-=vy;b.vz-=vz;}}
+
+  selectedId=earth.id;calcSelection={a:earth.id,b:null};refreshObjectsUI(true);
+  $('#spawnMode').value='orbit';$('#orbitPreset').value='circular';$('#periapsis').value='1';$('#apoapsis').value='1';$('#orbitInclination').value='0';
+  $('#orbitPrimary').value=String(sun.id);
+  syncSpawnControls();applyOrbitPreset();syncPopulationControls(false);updateAnalyticPopulations(simTime,true);updateLabels();updateTimeToolState();showToast('Full Solar System loaded');
+}
+
+// ---------- Pointer interactions ----------
+function absorbPan(){
+  if(!pan.x&&!pan.y)return;const p=pxPerAU();cam.x-=pan.x/p;cam.y+=pan.y/p;pan.x=pan.y=0;
+}
+function disableAutoCamera(){maxZoomOutActive=false;autoCenter=false;$('#centerToggle').checked=false;followedId=null;}
+function zoomAroundScreen(x,y,newZoom){
+  absorbPan();const before=screenToWorld(x,y);maxZoomOutActive=false;cam.zoom=clamp(newZoom,1e-8,1e4);const after=screenToWorld(x,y);cam.x+=before.x-after.x;cam.y+=before.y-after.y;syncZoomSlider();updateLabels();
+}
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoomAroundScreen(e.clientX,e.clientY,cam.zoom*Math.exp(-e.deltaY*.0014));},{passive:false});
+
+function firstTwoPointers(){return [...gesturePointers.values()].slice(0,2);}
+function initSingleGesture(){
+  absorbPan();const p=[...gesturePointers.values()][0];if(!p)return;gestureMode='pan';gestureStart={lastX:p.x,lastY:p.y,startX:p.x,startY:p.y,startTime:performance.now()};
+}
+function initPinchGesture(){
+  absorbPan();const pts=firstTwoPointers();if(pts.length<2)return;const midX=(pts[0].x+pts[1].x)/2,midY=(pts[0].y+pts[1].y)/2,dist=Math.max(8,hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y));
+  gestureMode='pinch';gestureStart={midX,midY,dist,zoom:cam.zoom,world:screenToWorld(midX,midY)};gestureMoved=true;disableAutoCamera();
+}
+canvas.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='touch')e.preventDefault();
+  try{canvas.setPointerCapture(e.pointerId);}catch(_){}
+  gesturePointers.set(e.pointerId,{x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,startTime:performance.now()});dragging=true;canvas.classList.add('dragging');
+  if(gesturePointers.size===1){gestureMoved=false;initSingleGesture();}else if(gesturePointers.size>=2)initPinchGesture();
+},{passive:false});
+canvas.addEventListener('pointermove',e=>{
+  const p=gesturePointers.get(e.pointerId);if(!p)return;if(e.pointerType==='touch')e.preventDefault();p.x=e.clientX;p.y=e.clientY;
+  if(gesturePointers.size>=2){
+    if(gestureMode!=='pinch')initPinchGesture();const pts=firstTwoPointers(),midX=(pts[0].x+pts[1].x)/2,midY=(pts[0].y+pts[1].y)/2,dist=Math.max(8,hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)),factor=dist/gestureStart.dist;
+    cam.zoom=clamp(gestureStart.zoom*factor,1e-8,1e4);const scale=pxPerAU();cam.x=gestureStart.world.x-(midX-W/2)/scale;cam.y=gestureStart.world.y+(midY-H/2)/scale;pan.x=pan.y=0;syncZoomSlider();updateLabels();gestureMoved=true;return;
+  }
+  if(gestureMode!=='pan')initSingleGesture();const dx=p.x-gestureStart.lastX,dy=p.y-gestureStart.lastY;if(Math.abs(p.x-gestureStart.startX)+Math.abs(p.y-gestureStart.startY)>5)gestureMoved=true;
+  if(dx||dy){const scale=pxPerAU();cam.x-=dx/scale;cam.y+=dy/scale;gestureStart.lastX=p.x;gestureStart.lastY=p.y;if(gestureMoved)disableAutoCamera();}
+},{passive:false});
+function finishPointer(e,cancelled=false){
+  const p=gesturePointers.get(e.pointerId),wasCount=gesturePointers.size,wasPinch=gestureMode==='pinch';gesturePointers.delete(e.pointerId);
+  if(!cancelled&&wasCount===1&&p&&!gestureMoved&&performance.now()-p.startTime<420)selectAt(e.clientX,e.clientY,false);
+  if(gesturePointers.size===1){gestureMoved=wasPinch;initSingleGesture();}else if(gesturePointers.size===0){gestureMode=null;gestureStart=null;dragging=false;canvas.classList.remove('dragging');}else initPinchGesture();
+}
+canvas.addEventListener('pointerup',e=>finishPointer(e,false));canvas.addEventListener('pointercancel',e=>finishPointer(e,true));canvas.addEventListener('lostpointercapture',e=>{if(gesturePointers.has(e.pointerId))finishPointer(e,true);});
+canvas.addEventListener('dblclick',e=>{e.preventDefault();selectAt(e.clientX,e.clientY,true);});canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+for(const evt of ['gesturestart','gesturechange','gestureend'])document.addEventListener(evt,e=>e.preventDefault(),{passive:false});
+
+function selectAt(x,y,follow){
+  let best=null,bestD=Infinity;
+  for(const b of bodies){
+    const s=bodyScreen(b),d=hypot(x-s.x,y-s.y),r=Math.max(visualRadius(b)+8,10);
+    if(d<r&&d<bestD){best=b;bestD=d;}
+  }
+  if(!best)return;
+  const wasSelected=selectedId===best.id;
+  selectedId=best.id;
+  // On the simulation canvas: first tap focuses. Any later tap on that same
+  // focused body follows it. Following is one-way here; repeated taps never unfollow.
+  if(follow||wasSelected){
+    followedId=best.id;autoCenter=false;$('#centerToggle').checked=false;
+    showToast(`Following ${best.name}`);
+  }else{
+    // Focusing a different body releases an old follow so the camera can center on the new selection.
+    followedId=null;
+    showToast(`Focused ${best.name}`);
+  }
+  updateSelected();
+}
+addEventListener('keydown',e=>{if(e.target.matches('input,select,textarea')||$('#renameOverlay').classList.contains('show')||$('#customObjectOverlay').classList.contains('show')||$('#calcWarningOverlay').classList.contains('show'))return;if(e.code==='Space'){e.preventDefault();togglePause();}else if(e.key.toLowerCase()==='h')hidePanel(!$('#panel').classList.contains('hidden'));else if(e.key.toLowerCase()==='r')$('#resetView').click();else if(e.key==='Delete'||e.key==='Backspace')deleteSelected();});
+
+// ---------- Main loop ----------
+function advanceSimulationSegment(realSeconds,rate){
+  if(paused||realSeconds<=0||!bodies.length)return 1;
+  const simDt=rate*realSeconds;
+  if(!isFinite(simDt)||simDt===0)return 1;
+  const substeps=chooseSubsteps(simDt),dt=simDt/substeps,sets=buildDynamicSets();
+  const focused=bodies.find(b=>b.alive&&isFocusedBody(b));
+  const trailBodies=trailsEnabled?bodies.filter(b=>b.alive&&b.populationId==null):focused?[focused]:[];
+  if(focused&&focused.populationId!=null&&!trailBodies.includes(focused))trailBodies.push(focused);
+  let collisionChanged=false,stepTime=simTime;
+  for(let s=0;s<substeps;s++){
+    collisionChanged=physicsStep(dt,sets)||collisionChanged;
+    stepTime+=dt;
+    if(focused?.analyticOrbit){const primary=bodies.find(b=>b.alive&&b.id===focused.analyticOrbit.primaryId);if(primary)updateAnalyticBody(focused,primary,stepTime);}
+    updateTrails(dt,stepTime,trailBodies);
+  }
+  simTime=stepTime;
+  for(const b of bodies)if(b.analyticOrbit)b.age+=Math.abs(simDt);
+  updateAnalyticPopulations(simTime);
+  if(collisionChanged){
+    bodies=bodies.filter(b=>b.alive&&b.mass>MIN_MASS);const aliveIds=new Set(bodies.map(b=>b.id));for(const b of bodies)if(b.keplerAnchorId!=null&&!aliveIds.has(b.keplerAnchorId))b.keplerAnchorId=null;
+  }
+  return substeps;
+}
+function frameRateSegments(prevNow,now){
+  const boost=timedRateBoost;
+  if(!boost){
+    const seconds=clamp((now-prevNow)/1000,0,.05);
+    return seconds>0?[{seconds,rate:sliderTimeScaleValue()*manualRateMultiplier}]:[];
+  }
+  const segments=[];
+  // The click can occur between animation frames. Preserve the old rate for
+  // the pre-click fraction, then apply exactly five wall-clock seconds of boost.
+  if(prevNow<boost.startReal){
+    const end=Math.min(now,boost.startReal);
+    if(end>prevNow)segments.push({seconds:(end-prevNow)/1000,rate:boost.originalRate});
+  }
+  const bs=Math.max(prevNow,boost.startReal),be=Math.min(now,boost.endReal);
+  if(be>bs)segments.push({seconds:(be-bs)/1000,rate:boost.boostRate});
+  if(now>boost.endReal){
+    const ps=Math.max(prevNow,boost.endReal);
+    if(now>ps)segments.push({seconds:(now-ps)/1000,rate:boost.originalRate});
+  }
+  return segments;
+}
+function loop(now){
+  requestAnimationFrame(loop);
+  const prevNow=lastNow,rawRealDt=Math.max(0,(now-prevNow)/1000);lastNow=now;
+  const frameMs=Math.min(rawRealDt,.25)*1000;
+  frameMsEMA=frameMsEMA*.92+frameMs*.08;
+  const instFPS=rawRealDt>0?1/rawRealDt:60;
+  fpsEMA=fpsEMA*.92+instFPS*.08;
+
+  let substeps=1;
+  if(!paused&&bodies.length){
+    const segments=frameRateSegments(prevNow,now);
+    for(const seg of segments)substeps=Math.max(substeps,advanceSimulationSegment(seg.seconds,seg.rate));
+    if(timedRateBoost&&now>=timedRateBoost.endReal)restoreTimedRateBoost(true);
+  }
+  updateCamera();
+  render(now);
+
+  if(now-lastUIUpdate>250){
+    $('#fps').textContent=Math.round(fpsEMA);
+    const dot=$('#fpsDot');
+    dot.style.background=fpsEMA>=55?'var(--good)':fpsEMA>=40?'var(--warn)':'var(--bad)';
+    $('#bodyCount').textContent=bodies.length;
+    updateLabels();updateSelected();qualityStatus(substeps);updateTimeToolState();refreshPredictionSpeedButtons();
+    lastUIUpdate=now;
+  }
+}
+
+// ---------- Start ----------
+resize();
+loadDemo();
+renderCustomObjectTemplates();updateLabels();updateTimeToolState();refreshPresetDropdown();hidePanel(true);
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
