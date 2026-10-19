@@ -1,0 +1,14 @@
+{
+  "version": 4,
+  "generatedAt": "2026-08-11T09:25:38.484Z",
+  "presets": [
+    {
+      "file": "Full Solar System.gravitylab.json",
+      "name": "Full Solar System"
+    },
+    {
+      "file": "stable_black_hole_neutron_star_earth_orbit.gravitylab.json",
+      "name": "Stable Black Hole Orbit"
+    }
+  ]
+}
